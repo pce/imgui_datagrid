@@ -1,0 +1,4 @@
+{
+  "adapterName": "sqlite",
+  "connectionString": "/tmp/demo.db"
+}
