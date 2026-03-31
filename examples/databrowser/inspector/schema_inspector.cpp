@@ -7,46 +7,36 @@
 
 namespace Inspector {
 
-// ============================================================
-//  Open  —  fetch sample rows, run inference, cache results
-// ============================================================
-
-void SchemaInspector::Open(
-    Adapters::IDataSource* source,
-    const std::string&     tableName,
-    int                    sampleSize)
+void SchemaInspector::Open(Adapters::IDataSource* source, const std::string& tableName, int sampleSize)
 {
     analysis_ = {};
 
     if (!source || !source->IsConnected() || tableName.empty()) {
-        isOpen_ = true;   // open the window so the error is visible
+        isOpen_ = true; // open the window so the error is visible
         return;
     }
 
-    analysis_.tableName   = tableName;
+    analysis_.tableName    = tableName;
     analysis_.adapterLabel = source->AdapterLabel();
 
-    // ── Column metadata from adapter schema ───────────────────────────────
     const auto colInfos = source->GetColumns(tableName);
 
-    // ── Fetch sample rows ─────────────────────────────────────────────────
     Adapters::DataQuery q;
     q.table    = tableName;
     q.pageSize = sampleSize;
     q.page     = 0;
 
     const Adapters::QueryResult res = source->ExecuteQuery(q);
-    analysis_.sampleRows = static_cast<int>(res.rows.size());
+    analysis_.sampleRows            = static_cast<int>(res.rows.size());
 
     // CountQuery uses the same (no-filter) DataQuery → total rows
     {
         Adapters::DataQuery countQ;
-        countQ.table    = tableName;
-        countQ.pageSize = 1;
+        countQ.table        = tableName;
+        countQ.pageSize     = 1;
         analysis_.totalRows = source->CountQuery(countQ);
     }
 
-    // ── Build per-column analysis ─────────────────────────────────────────
     analysis_.columns.reserve(colInfos.size());
 
     for (size_t c = 0; c < colInfos.size(); ++c) {
@@ -80,7 +70,6 @@ void SchemaInspector::Open(
         analysis_.columns.push_back(std::move(col));
     }
 
-    // ── CSV-specific analysis ─────────────────────────────────────────────
     // The adapter name tells us if we're looking at a CSV source.
     // We re-examine the first two data rows (already parsed) to run
     // header and delimiter detection so the inspector can show results.
@@ -103,10 +92,11 @@ void SchemaInspector::Open(
             // first row from a CSV is a valid field, not a line.
             // Fall back to running DetectDelimiter on the column names joined
             // with common candidates.
-            const auto& firstRow  = analysis_.columns;
+            const auto&              firstRow = analysis_.columns;
             std::vector<std::string> names;
             names.reserve(firstRow.size());
-            for (const auto& col : firstRow) names.push_back(col.name);
+            for (const auto& col : firstRow)
+                names.push_back(col.name);
 
             // Build a pseudo header line with each candidate delimiter and
             // let DetectDelimiter vote.
@@ -114,7 +104,8 @@ void SchemaInspector::Open(
             for (char sep : {',', '\t', ';', '|', ':'}) {
                 std::string line;
                 for (size_t i = 0; i < names.size(); ++i) {
-                    if (i) line += sep;
+                    if (i)
+                        line += sep;
                     line += names[i];
                 }
                 pseudoLines.push_back(line);
@@ -122,7 +113,8 @@ void SchemaInspector::Open(
                     const auto& row = res.rows.front();
                     std::string dataLine;
                     for (size_t i = 0; i < row.size(); ++i) {
-                        if (i) dataLine += sep;
+                        if (i)
+                            dataLine += sep;
                         dataLine += row[i];
                     }
                     pseudoLines.push_back(dataLine);
@@ -155,17 +147,16 @@ void SchemaInspector::Open(
     isOpen_ = true;
 }
 
-// ============================================================
-//  ConfidenceBar
-// ============================================================
-
 void SchemaInspector::ConfidenceBar(float value, float width)
 {
     // Colour: green ≥ 0.9, yellow ≥ 0.7, red < 0.7
     ImVec4 colour;
-    if      (value >= 0.90f) colour = ImVec4(0.20f, 0.75f, 0.30f, 1.0f);
-    else if (value >= 0.70f) colour = ImVec4(0.85f, 0.75f, 0.10f, 1.0f);
-    else                     colour = ImVec4(0.85f, 0.25f, 0.20f, 1.0f);
+    if (value >= 0.90f)
+        colour = ImVec4(0.20f, 0.75f, 0.30f, 1.0f);
+    else if (value >= 0.70f)
+        colour = ImVec4(0.85f, 0.75f, 0.10f, 1.0f);
+    else
+        colour = ImVec4(0.85f, 0.25f, 0.20f, 1.0f);
 
     ImGui::PushStyleColor(ImGuiCol_PlotHistogram, colour);
     char overlay[16];
@@ -174,21 +165,17 @@ void SchemaInspector::ConfidenceBar(float value, float width)
     ImGui::PopStyleColor();
 }
 
-// ============================================================
-//  Render
-// ============================================================
-
 void SchemaInspector::Render()
 {
-    if (!isOpen_) return;
+    if (!isOpen_)
+        return;
 
     const float minW = 640.0f;
     const float minH = 300.0f;
     ImGui::SetNextWindowSizeConstraints(ImVec2(minW, minH), ImVec2(FLT_MAX, FLT_MAX));
     ImGui::SetNextWindowSize(ImVec2(900.0f, 480.0f), ImGuiCond_FirstUseEver);
 
-    const std::string title = std::format("Schema Inspector \xe2\x80\x94 {}##si_{}",
-                                          analysis_.tableName, instanceId_);
+    const std::string title = std::format("Schema Inspector \xe2\x80\x94 {}##si_{}", analysis_.tableName, instanceId_);
     if (!ImGui::Begin(title.c_str(), &isOpen_, ImGuiWindowFlags_NoCollapse)) {
         ImGui::End();
         return;
@@ -215,18 +202,12 @@ void SchemaInspector::Render()
     }
 
     // Escape key closes the inspector when this window is focused
-    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
-        ImGui::IsKeyPressed(ImGuiKey_Escape))
-    {
+    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
         isOpen_ = false;
     }
 
     ImGui::End();
 }
-
-// ============================================================
-//  RenderSummaryHeader
-// ============================================================
 
 void SchemaInspector::RenderSummaryHeader()
 {
@@ -248,37 +229,27 @@ void SchemaInspector::RenderSummaryHeader()
     ImGui::TextDisabled("%zu columns", analysis_.columns.size());
 }
 
-// ============================================================
-//  RenderColumnsTable
-// ============================================================
-
 void SchemaInspector::RenderColumnsTable()
 {
-    constexpr ImGuiTableFlags flags =
-        ImGuiTableFlags_Borders    |
-        ImGuiTableFlags_RowBg      |
-        ImGuiTableFlags_ScrollY    |
-        ImGuiTableFlags_Resizable  |
-        ImGuiTableFlags_SizingStretchProp;
+    constexpr ImGuiTableFlags flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
+                                      ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp;
 
     // Reserve enough height for the CSV section below (if present)
-    const float reserveH = analysis_.hasCsvInfo
-        ? ImGui::GetTextLineHeightWithSpacing() * 7.0f
-        : 0.0f;
-    const float tableH = ImGui::GetContentRegionAvail().y - reserveH - 32.0f;
+    const float reserveH = analysis_.hasCsvInfo ? ImGui::GetTextLineHeightWithSpacing() * 7.0f : 0.0f;
+    const float tableH   = ImGui::GetContentRegionAvail().y - reserveH - 32.0f;
 
     if (!ImGui::BeginTable("##si_cols", 8, flags, ImVec2(0, std::max(tableH, 80.0f))))
         return;
 
     ImGui::TableSetupScrollFreeze(0, 1);
-    ImGui::TableSetupColumn("Column",       ImGuiTableColumnFlags_WidthStretch, 1.4f);
-    ImGui::TableSetupColumn("Declared",     ImGuiTableColumnFlags_WidthStretch, 0.8f);
-    ImGui::TableSetupColumn("Inferred",     ImGuiTableColumnFlags_WidthStretch, 0.8f);
-    ImGui::TableSetupColumn("Confidence",   ImGuiTableColumnFlags_WidthFixed,   72.0f);
-    ImGui::TableSetupColumn("Null %",       ImGuiTableColumnFlags_WidthFixed,   52.0f);
-    ImGui::TableSetupColumn("PK",           ImGuiTableColumnFlags_WidthFixed,   28.0f);
-    ImGui::TableSetupColumn("Nullable",     ImGuiTableColumnFlags_WidthFixed,   56.0f);
-    ImGui::TableSetupColumn("Samples",      ImGuiTableColumnFlags_WidthStretch, 2.0f);
+    ImGui::TableSetupColumn("Column", ImGuiTableColumnFlags_WidthStretch, 1.4f);
+    ImGui::TableSetupColumn("Declared", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+    ImGui::TableSetupColumn("Inferred", ImGuiTableColumnFlags_WidthStretch, 0.8f);
+    ImGui::TableSetupColumn("Confidence", ImGuiTableColumnFlags_WidthFixed, 72.0f);
+    ImGui::TableSetupColumn("Null %", ImGuiTableColumnFlags_WidthFixed, 52.0f);
+    ImGui::TableSetupColumn("PK", ImGuiTableColumnFlags_WidthFixed, 28.0f);
+    ImGui::TableSetupColumn("Nullable", ImGuiTableColumnFlags_WidthFixed, 56.0f);
+    ImGui::TableSetupColumn("Samples", ImGuiTableColumnFlags_WidthStretch, 2.0f);
     ImGui::TableHeadersRow();
 
     for (int i = 0; i < static_cast<int>(analysis_.columns.size()); ++i)
@@ -287,56 +258,58 @@ void SchemaInspector::RenderColumnsTable()
     ImGui::EndTable();
 }
 
-// ============================================================
-//  RenderColumnRow
-// ============================================================
-
 void SchemaInspector::RenderColumnRow(const ColumnAnalysis& col, int rowIdx)
 {
     ImGui::TableNextRow();
     ImGui::PushID(rowIdx);
 
-    // ── Column name ────────────────────────────────────────────────────────
     ImGui::TableSetColumnIndex(0);
     if (col.primaryKey)
         ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), "%s", col.name.c_str());
     else
         ImGui::TextUnformatted(col.name.c_str());
 
-    // ── Declared type ──────────────────────────────────────────────────────
     ImGui::TableSetColumnIndex(1);
     if (col.declaredType.empty())
         ImGui::TextDisabled("—");
     else
         ImGui::TextDisabled("%s", col.declaredType.c_str());
 
-    // ── Inferred type ──────────────────────────────────────────────────────
     ImGui::TableSetColumnIndex(2);
     {
         const char* tname = TypeInfer::TypeName(col.inference.type);
         // Colour text by inferred type for quick scanning
         ImVec4 col_colour;
         switch (col.inference.type) {
-            case TypeInfer::InferredType::Boolean:  col_colour = ImVec4(0.9f, 0.5f, 0.9f, 1.0f); break;
-            case TypeInfer::InferredType::Integer:  col_colour = ImVec4(0.4f, 0.85f, 1.0f, 1.0f); break;
-            case TypeInfer::InferredType::Real:     col_colour = ImVec4(0.3f, 0.9f, 0.7f, 1.0f); break;
-            case TypeInfer::InferredType::DateTime: col_colour = ImVec4(1.0f, 0.75f, 0.3f, 1.0f); break;
-            case TypeInfer::InferredType::Date:     col_colour = ImVec4(1.0f, 0.65f, 0.2f, 1.0f); break;
-            default:                                col_colour = ImGui::GetStyleColorVec4(ImGuiCol_Text); break;
+            case TypeInfer::InferredType::Boolean:
+                col_colour = ImVec4(0.9f, 0.5f, 0.9f, 1.0f);
+                break;
+            case TypeInfer::InferredType::Integer:
+                col_colour = ImVec4(0.4f, 0.85f, 1.0f, 1.0f);
+                break;
+            case TypeInfer::InferredType::Real:
+                col_colour = ImVec4(0.3f, 0.9f, 0.7f, 1.0f);
+                break;
+            case TypeInfer::InferredType::DateTime:
+                col_colour = ImVec4(1.0f, 0.75f, 0.3f, 1.0f);
+                break;
+            case TypeInfer::InferredType::Date:
+                col_colour = ImVec4(1.0f, 0.65f, 0.2f, 1.0f);
+                break;
+            default:
+                col_colour = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+                break;
         }
         ImGui::TextColored(col_colour, "%s", tname);
     }
 
-    // ── Confidence bar ─────────────────────────────────────────────────────
     ImGui::TableSetColumnIndex(3);
     ConfidenceBar(col.inference.confidence, ImGui::GetContentRegionAvail().x);
 
-    // ── Null % ────────────────────────────────────────────────────────────
     ImGui::TableSetColumnIndex(4);
     if (col.inference.total > 0) {
         const float nullPct =
-            static_cast<float>(col.inference.nullCount) /
-            static_cast<float>(col.inference.total) * 100.0f;
+            static_cast<float>(col.inference.nullCount) / static_cast<float>(col.inference.total) * 100.0f;
         if (col.inference.nullCount > 0)
             ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f), "%.0f%%", nullPct);
         else
@@ -345,18 +318,15 @@ void SchemaInspector::RenderColumnRow(const ColumnAnalysis& col, int rowIdx)
         ImGui::TextDisabled("—");
     }
 
-    // ── PK ────────────────────────────────────────────────────────────────
     ImGui::TableSetColumnIndex(5);
     if (col.primaryKey)
         ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.2f, 1.0f), "PK");
     else
         ImGui::TextDisabled("—");
 
-    // ── Nullable ──────────────────────────────────────────────────────────
     ImGui::TableSetColumnIndex(6);
     ImGui::TextUnformatted(col.nullable ? "yes" : "no");
 
-    // ── Sample values ─────────────────────────────────────────────────────
     ImGui::TableSetColumnIndex(7);
     if (col.sampleCount == 0) {
         ImGui::TextDisabled("(empty)");
@@ -389,10 +359,6 @@ void SchemaInspector::RenderColumnRow(const ColumnAnalysis& col, int rowIdx)
     ImGui::PopID();
 }
 
-// ============================================================
-//  RenderCsvSection
-// ============================================================
-
 void SchemaInspector::RenderCsvSection()
 {
     ImGui::Text("CSV Analysis");
@@ -401,13 +367,13 @@ void SchemaInspector::RenderCsvSection()
     // Delimiter
     ImGui::Text("Detected delimiter:");
     ImGui::SameLine();
-    const char delim = analysis_.csvDelimiter.delimiter;
-    const char* delimName =
-        (delim == ',')  ? "comma (,)"     :
-        (delim == '\t') ? "tab (\\t)"     :
-        (delim == ';')  ? "semicolon (;)" :
-        (delim == '|')  ? "pipe (|)"      :
-        (delim == ':')  ? "colon (:)"     : "unknown";
+    const char  delim     = analysis_.csvDelimiter.delimiter;
+    const char* delimName = (delim == ',')    ? "comma (,)"
+                            : (delim == '\t') ? "tab (\\t)"
+                            : (delim == ';')  ? "semicolon (;)"
+                            : (delim == '|')  ? "pipe (|)"
+                            : (delim == ':')  ? "colon (:)"
+                                              : "unknown";
     ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.6f, 1.0f), "%s", delimName);
     ImGui::SameLine(0, 12);
     ImGui::TextDisabled("confidence:");

@@ -1,0 +1,74 @@
+---
+Language:        Cpp
+Standard:        Latest
+BasedOnStyle:    LLVM
+
+# Indentation
+IndentWidth:             4
+ContinuationIndentWidth: 4
+TabWidth:                4
+UseTab:                  Never
+NamespaceIndentation:    None
+IndentCaseLabels:        true
+
+# Column limit
+ColumnLimit:     120
+
+# Brace style — Allman for functions/classes/structs, attach for control flow
+BreakBeforeBraces:  Custom
+BraceWrapping:
+  AfterCaseLabel:     false
+  AfterClass:         true
+  AfterControlStatement: Never
+  AfterEnum:          true
+  AfterFunction:      true
+  AfterNamespace:     false
+  AfterStruct:        true
+  AfterUnion:         true
+  BeforeCatch:        false
+  BeforeElse:         false
+  IndentBraces:       false
+  SplitEmptyFunction: false
+  SplitEmptyRecord:   false
+
+# Includes
+SortIncludes:            CaseSensitive
+IncludeBlocks:           Preserve
+
+# Alignment
+AlignConsecutiveDeclarations:
+  Enabled:          true
+  AcrossEmptyLines: false
+  AcrossComments:   false
+AlignConsecutiveAssignments:
+  Enabled:          true
+  AcrossEmptyLines: false
+  AcrossComments:   false
+AlignTrailingComments:
+  Kind:             Always
+  OverEmptyLines:   1
+PointerAlignment:        Left
+
+# Spacing
+SpaceBeforeParens:       ControlStatements
+SpaceAfterTemplateKeyword: false
+SpacesInAngles:          Never
+Cpp11BracedListStyle:    true
+
+# Short constructs
+AllowShortFunctionsOnASingleLine:   Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine:      All
+AllowShortLoopsOnASingleLine:        false
+
+# Breaking
+BreakConstructorInitializers: BeforeColon
+BreakInheritanceList:         BeforeColon
+PackConstructorInitializers:  BinPack
+AlwaysBreakTemplateDeclarations: Yes
+BinPackArguments:    false
+BinPackParameters:   false
+
+# Comments
+ReflowComments:  false
+...

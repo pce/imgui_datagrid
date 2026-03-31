@@ -1,19 +1,4 @@
 #pragma once
-/// FilesystemAdapter — IDataSource implementation for local filesystem navigation.
-/// Bridges std::filesystem into the IDataSource protocol so DataBrowser can
-/// browse directories exactly as it browses SQLite tables or CSV files.
-/// See docs/filesystem_adapter.md for the full design rationale.
-///
-/// PROTOCOL MAPPING
-///   GetCatalogs()          → bookmarked root paths (home dir, fs root, user additions)
-///   GetTables(catalog)     → direct subdirectories of `catalog`  (kind == "dir")
-///   GetColumns(table)      → fixed schema: name, kind, size, modified, permissions, path
-///   ExecuteQuery({.table}) → directory listing with filter / sort / pagination
-///
-/// CONNECTION STRING
-///   p.adapterName      = "filesystem";
-///   p.connectionString = "/starting/path";  // empty → home directory
-
 #include "../data_source.hpp"
 
 #include <cstdint>
@@ -25,59 +10,52 @@ namespace fs = std::filesystem;
 
 namespace Adapters {
 
-// ── FilesystemEntry ────────────────────────────────────────────────────────
-/// One row of a directory listing.  Raw fields are kept for sort/filter;
-/// the formatted string fields are what the grid displays.
-struct FilesystemEntry {
-    std::string name;         ///< Filename only (no directory part)
-    std::string kind;         ///< "dir" | "file" | "symlink" | "other"
-    std::string sizeStr;      ///< Human-readable size ("1.4 MB", "—" for dirs)
-    std::string modified;     ///< ISO-8601 "YYYY-MM-DD HH:MM"
-    std::string permissions;  ///< POSIX-style "rwxr-xr-x"
-    std::string path;         ///< Absolute path (hidden grid column used in callbacks)
+struct FilesystemEntry
+{
+    std::string name;                  ///< Filename only (no directory part)
+    std::string kind;                  ///< "dir" | "file" | "symlink" | "other"
+    std::string sizeStr;               ///< Human-readable size ("1.4 MB", "—" for dirs)
+    std::string modified;              ///< ISO-8601 "YYYY-MM-DD HH:MM"
+    std::string permissions;           ///< POSIX-style "rwxr-xr-x"
+    std::string path;                  ///< Absolute path (hidden grid column used in callbacks)
 
-    std::uintmax_t     sizeBytes = 0;     ///< Raw byte count for numeric sorting
-    fs::file_time_type modTime   = {};    ///< Raw mtime for chronological sorting
+    std::uintmax_t     sizeBytes = 0;  ///< Raw byte count for numeric sorting
+    fs::file_time_type modTime   = {}; ///< Raw mtime for chronological sorting
 };
 
-// ── FilesystemAdapter ──────────────────────────────────────────────────────
-class FilesystemAdapter final : public IDataSource {
-public:
+class FilesystemAdapter final : public IDataSource
+{
+  public:
     FilesystemAdapter();
     ~FilesystemAdapter() override = default;
 
     FilesystemAdapter(const FilesystemAdapter&)            = delete;
     FilesystemAdapter& operator=(const FilesystemAdapter&) = delete;
 
-    FilesystemAdapter(FilesystemAdapter&&)            noexcept = default;
+    FilesystemAdapter(FilesystemAdapter&&) noexcept            = default;
     FilesystemAdapter& operator=(FilesystemAdapter&&) noexcept = default;
 
-    // ── Adapter identity ──────────────────────────────────────────────────
-    [[nodiscard]] std::string AdapterName()    const override { return "filesystem"; }
+    [[nodiscard]] std::string AdapterName() const override { return "filesystem"; }
     [[nodiscard]] std::string AdapterVersion() const override { return "1.0.0"; }
-    [[nodiscard]] std::string AdapterLabel()   const override;
+    [[nodiscard]] std::string AdapterLabel() const override;
 
-    // ── Connection lifecycle ──────────────────────────────────────────────
     /// connectionString = starting directory path.  Empty → home directory.
     std::expected<void, Error> Connect(const ConnectionParams& params) override;
-    void        Disconnect()                            override;
-    [[nodiscard]] bool        IsConnected()             const override;
-    [[nodiscard]] std::string LastError()               const override;
-
-    // ── Schema navigation ─────────────────────────────────────────────────
+    void                       Disconnect() override;
+    [[nodiscard]] bool         IsConnected() const override;
+    [[nodiscard]] std::string  LastError() const override;
 
     /// Returns bookmarked root paths (home dir, filesystem root, user additions).
-    [[nodiscard]] std::vector<std::string> GetCatalogs()                         const override;
+    [[nodiscard]] std::vector<std::string> GetCatalogs() const override;
 
     /// Returns one TableInfo per direct subdirectory of `catalog`.
     /// TableInfo::name = absolute path,  TableInfo::kind = "dir".
-    [[nodiscard]] std::vector<TableInfo>   GetTables(const std::string& catalog) const override;
+    [[nodiscard]] std::vector<TableInfo> GetTables(const std::string& catalog) const override;
 
     /// Returns the fixed six-column schema (name, kind, size, modified, permissions, path).
     /// Column indices are stable — callbacks may rely on row[5] == absolute path.
-    [[nodiscard]] std::vector<ColumnInfo>  GetColumns(const std::string& table)  const override;
+    [[nodiscard]] std::vector<ColumnInfo> GetColumns(const std::string& table) const override;
 
-    // ── Structured queries ────────────────────────────────────────────────
     /// query.table = absolute directory path to enumerate.
     ///
     /// Supported DataQuery fields:
@@ -86,61 +64,49 @@ public:
     ///   sortColumn           = "name" | "size" | "modified" | "kind"
     ///   sortAscending, page, pageSize
     [[nodiscard]] QueryResult ExecuteQuery(const DataQuery& q) const override;
-    [[nodiscard]] int         CountQuery  (const DataQuery& q) const override;
+    [[nodiscard]] int         CountQuery(const DataQuery& q) const override;
 
     /// Not applicable — always returns an error result.
     [[nodiscard]] QueryResult Execute(const std::string& sql) const override;
 
-    // ── Navigation API ────────────────────────────────────────────────────
-    /// These are called from DataBrowser callbacks and toolbar buttons.
-    /// Call browser->InvalidateData() after any navigation call.
-
-    void SetCurrentPath(const std::string& absolutePath);
+    void                      SetCurrentPath(const std::string& absolutePath);
     [[nodiscard]] std::string GetCurrentPath() const;
-    [[nodiscard]] std::string GetParentPath()  const;
+    [[nodiscard]] std::string GetParentPath() const;
 
     /// Navigate up one level.  Returns false if already at the root.
     bool NavigateUp();
     void NavigateHome();
 
-    [[nodiscard]] bool EntryIsDir (const std::string& absolutePath) const;
+    [[nodiscard]] bool EntryIsDir(const std::string& absolutePath) const;
     [[nodiscard]] bool EntryIsFile(const std::string& absolutePath) const;
 
-    // ── Bookmarks ─────────────────────────────────────────────────────────
-
     /// Add a path to the catalog list.  Ignored if not an existing directory.
-    void AddBookmark   (const std::string& absolutePath);
+    void AddBookmark(const std::string& absolutePath);
     /// Remove a user-added bookmark.  Built-in entries (home, root) are immutable.
-    void RemoveBookmark(const std::string& absolutePath);
+    void                                   RemoveBookmark(const std::string& absolutePath);
     [[nodiscard]] std::vector<std::string> Bookmarks() const;
 
-    // ── Options ───────────────────────────────────────────────────────────
-
-    void SetShowHidden    (bool show);
-    void SetFollowSymlinks(bool follow);
-    [[nodiscard]] bool GetShowHidden()     const;
+    void               SetShowHidden(bool show);
+    void               SetFollowSymlinks(bool follow);
+    [[nodiscard]] bool GetShowHidden() const;
     [[nodiscard]] bool GetFollowSymlinks() const;
 
-private:
-    // ── Helpers ───────────────────────────────────────────────────────────
-
+  private:
     /// Enumerate entries in `dir` respecting hidden / symlink settings.
     [[nodiscard]] std::vector<FilesystemEntry> EnumerateDir(const fs::path& dir) const;
 
     /// Apply DataQuery filters and sort to a flat entry list.
-    [[nodiscard]] std::vector<FilesystemEntry> ApplyQuery(
-        std::vector<FilesystemEntry> entries,
-        const DataQuery& q) const;
+    [[nodiscard]] std::vector<FilesystemEntry> ApplyQuery(std::vector<FilesystemEntry> entries,
+                                                          const DataQuery&             q) const;
 
-    [[nodiscard]] static std::string FormatSize (std::uintmax_t bytes, bool isDir);
-    [[nodiscard]] static std::string FormatTime (const fs::file_time_type& t);
-    [[nodiscard]] static std::string FormatPerms(fs::perms p);
+    [[nodiscard]] static std::string              FormatSize(std::uintmax_t bytes, bool isDir);
+    [[nodiscard]] static std::string              FormatTime(const fs::file_time_type& t);
+    [[nodiscard]] static std::string              FormatPerms(fs::perms p);
     [[nodiscard]] static std::vector<std::string> EntryToRow(const FilesystemEntry& e);
 
     [[nodiscard]] static fs::path HomeDir();
     [[nodiscard]] static fs::path RootDir();
 
-    // ── State ──────────────────────────────────────────────────────────────
     fs::path                 currentPath_;
     std::vector<std::string> bookmarks_;
     std::string              lastError_;

@@ -1,16 +1,12 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "adapters/sqlite/sqlite_adapter.hpp"
 #include "adapters/data_source.hpp"
-
-// ============================================================
-//  Helpers
-// ============================================================
+#include "adapters/sqlite/sqlite_adapter.hpp"
 
 // Creates a connected in-memory SQLiteAdapter and seeds it with a simple table.
 static Adapters::SQLiteAdapter MakeSeededAdapter()
 {
-    Adapters::SQLiteAdapter adapter;
+    Adapters::SQLiteAdapter    adapter;
     Adapters::ConnectionParams p;
     p.connectionString = ":memory:";
 
@@ -32,13 +28,9 @@ static Adapters::SQLiteAdapter MakeSeededAdapter()
     return adapter;
 }
 
-// ============================================================
-//  Connection lifecycle
-// ============================================================
-
 TEST_CASE("SQLiteAdapter: connect to in-memory DB", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    Adapters::SQLiteAdapter    adapter;
     Adapters::ConnectionParams p;
     p.connectionString = ":memory:";
 
@@ -49,10 +41,10 @@ TEST_CASE("SQLiteAdapter: connect to in-memory DB", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: connect to non-existent path fails gracefully", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    Adapters::SQLiteAdapter    adapter;
     Adapters::ConnectionParams p;
     p.connectionString = "/no/such/directory/missing.db";
-    p.readOnly         = true;   // OPEN_READONLY on a missing file must fail
+    p.readOnly         = true; // OPEN_READONLY on a missing file must fail
 
     REQUIRE_FALSE(adapter.Connect(p).has_value());
     REQUIRE_FALSE(adapter.IsConnected());
@@ -61,7 +53,7 @@ TEST_CASE("SQLiteAdapter: connect to non-existent path fails gracefully", "[sqli
 
 TEST_CASE("SQLiteAdapter: disconnect clears connection", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    Adapters::SQLiteAdapter    adapter;
     Adapters::ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
@@ -72,22 +64,18 @@ TEST_CASE("SQLiteAdapter: disconnect clears connection", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: re-connect is safe", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    Adapters::SQLiteAdapter    adapter;
     Adapters::ConnectionParams p;
     p.connectionString = ":memory:";
 
     REQUIRE(adapter.Connect(p).has_value());
-    REQUIRE(adapter.Connect(p).has_value());   // second Connect — should not crash or leak
+    REQUIRE(adapter.Connect(p).has_value()); // second Connect — should not crash or leak
     REQUIRE(adapter.IsConnected());
 }
 
-// ============================================================
-//  AdapterLabel
-// ============================================================
-
 TEST_CASE("SQLiteAdapter: AdapterLabel contains SQLite version", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    Adapters::SQLiteAdapter    adapter;
     Adapters::ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
@@ -101,13 +89,9 @@ TEST_CASE("SQLiteAdapter: AdapterLabel contains SQLite version", "[sqlite]")
 TEST_CASE("SQLiteAdapter: AdapterLabel when disconnected", "[sqlite]")
 {
     Adapters::SQLiteAdapter adapter;
-    const std::string label = adapter.AdapterLabel();
-    CHECK_FALSE(label.empty());   // should return a safe fallback string
+    const std::string       label = adapter.AdapterLabel();
+    CHECK_FALSE(label.empty()); // should return a safe fallback string
 }
-
-// ============================================================
-//  AdapterName / AdapterVersion
-// ============================================================
 
 TEST_CASE("SQLiteAdapter: AdapterName is 'sqlite'", "[sqlite]")
 {
@@ -121,13 +105,9 @@ TEST_CASE("SQLiteAdapter: AdapterVersion is non-empty", "[sqlite]")
     CHECK_FALSE(adapter.AdapterVersion().empty());
 }
 
-// ============================================================
-//  Schema navigation — GetCatalogs
-// ============================================================
-
 TEST_CASE("SQLiteAdapter: GetCatalogs returns the connection path", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    Adapters::SQLiteAdapter    adapter;
     Adapters::ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
@@ -137,13 +117,9 @@ TEST_CASE("SQLiteAdapter: GetCatalogs returns the connection path", "[sqlite]")
     CHECK(cats[0] == ":memory:");
 }
 
-// ============================================================
-//  Schema navigation — GetTables
-// ============================================================
-
 TEST_CASE("SQLiteAdapter: GetTables on empty DB returns no user tables", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    Adapters::SQLiteAdapter    adapter;
     Adapters::ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
@@ -154,7 +130,7 @@ TEST_CASE("SQLiteAdapter: GetTables on empty DB returns no user tables", "[sqlit
 
 TEST_CASE("SQLiteAdapter: GetTables reflects created tables", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    Adapters::SQLiteAdapter    adapter;
     Adapters::ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
@@ -168,8 +144,10 @@ TEST_CASE("SQLiteAdapter: GetTables reflects created tables", "[sqlite]")
     // Names should be t1 and t2 (order may vary)
     bool foundT1 = false, foundT2 = false;
     for (const auto& t : tables) {
-        if (t.name == "t1") foundT1 = true;
-        if (t.name == "t2") foundT2 = true;
+        if (t.name == "t1")
+            foundT1 = true;
+        if (t.name == "t2")
+            foundT2 = true;
         CHECK(t.kind == "table");
     }
     CHECK(foundT1);
@@ -178,7 +156,7 @@ TEST_CASE("SQLiteAdapter: GetTables reflects created tables", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: GetTables excludes sqlite_ system tables", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    Adapters::SQLiteAdapter    adapter;
     Adapters::ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
@@ -192,7 +170,7 @@ TEST_CASE("SQLiteAdapter: GetTables excludes sqlite_ system tables", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: GetTables surfaces views", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    Adapters::SQLiteAdapter    adapter;
     Adapters::ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
@@ -200,16 +178,13 @@ TEST_CASE("SQLiteAdapter: GetTables surfaces views", "[sqlite]")
     adapter.Execute("CREATE TABLE base (id INTEGER, val TEXT)");
     adapter.Execute("CREATE VIEW myview AS SELECT id FROM base WHERE id > 0");
 
-    const auto tables = adapter.GetTables("");
-    bool foundView = false;
+    const auto tables    = adapter.GetTables("");
+    bool       foundView = false;
     for (const auto& t : tables)
-        if (t.name == "myview" && t.kind == "view") foundView = true;
+        if (t.name == "myview" && t.kind == "view")
+            foundView = true;
     CHECK(foundView);
 }
-
-// ============================================================
-//  Schema navigation — GetColumns
-// ============================================================
 
 TEST_CASE("SQLiteAdapter: GetColumns returns correct column metadata", "[sqlite]")
 {
@@ -218,11 +193,11 @@ TEST_CASE("SQLiteAdapter: GetColumns returns correct column metadata", "[sqlite]
     const auto cols = adapter.GetColumns("people");
     REQUIRE(cols.size() == 4);
 
-    CHECK(cols[0].name       == "id");
+    CHECK(cols[0].name == "id");
     CHECK(cols[0].primaryKey == true);
 
-    CHECK(cols[1].name     == "name");
-    CHECK(cols[1].nullable == false);   // NOT NULL in DDL
+    CHECK(cols[1].name == "name");
+    CHECK(cols[1].nullable == false); // NOT NULL in DDL
 
     CHECK(cols[2].name == "age");
     CHECK(cols[3].name == "score");
@@ -246,10 +221,6 @@ TEST_CASE("SQLiteAdapter: GetColumns on unknown table returns empty", "[sqlite]"
     auto adapter = MakeSeededAdapter();
     CHECK(adapter.GetColumns("no_such_table").empty());
 }
-
-// ============================================================
-//  ExecuteQuery — basic fetch
-// ============================================================
 
 TEST_CASE("SQLiteAdapter: ExecuteQuery returns all rows", "[sqlite]")
 {
@@ -297,14 +268,10 @@ TEST_CASE("SQLiteAdapter: ExecuteQuery result values are correct strings", "[sql
     REQUIRE(result.ok());
     REQUIRE(result.rows.size() == 5);
 
-    CHECK(result.rows[0][0] == "1");      // id
-    CHECK(result.rows[0][1] == "Alice");  // name
-    CHECK(result.rows[0][2] == "30");     // age
+    CHECK(result.rows[0][0] == "1");     // id
+    CHECK(result.rows[0][1] == "Alice"); // name
+    CHECK(result.rows[0][2] == "30");    // age
 }
-
-// ============================================================
-//  ExecuteQuery — pagination
-// ============================================================
 
 TEST_CASE("SQLiteAdapter: pagination page 0", "[sqlite]")
 {
@@ -349,7 +316,7 @@ TEST_CASE("SQLiteAdapter: last page may be partial", "[sqlite]")
     Adapters::DataQuery q;
     q.table    = "people";
     q.pageSize = 3;
-    q.page     = 1;   // rows 4–5
+    q.page     = 1; // rows 4–5
 
     const auto result = adapter.ExecuteQuery(q);
     REQUIRE(result.ok());
@@ -369,10 +336,6 @@ TEST_CASE("SQLiteAdapter: page beyond end returns empty rows", "[sqlite]")
     REQUIRE(result.ok());
     CHECK(result.rows.empty());
 }
-
-// ============================================================
-//  ExecuteQuery — sort
-// ============================================================
 
 TEST_CASE("SQLiteAdapter: sort ascending by name", "[sqlite]")
 {
@@ -411,18 +374,14 @@ TEST_CASE("SQLiteAdapter: sort descending by age", "[sqlite]")
     CHECK(result.rows[0][1] == "Charlie");
 }
 
-// ============================================================
-//  ExecuteQuery — exact-match filter
-// ============================================================
-
 TEST_CASE("SQLiteAdapter: whereExact filter", "[sqlite]")
 {
     auto adapter = MakeSeededAdapter();
 
     Adapters::DataQuery q;
-    q.table               = "people";
-    q.pageSize            = 100;
-    q.whereExact["name"]  = "Alice";
+    q.table              = "people";
+    q.pageSize           = 100;
+    q.whereExact["name"] = "Alice";
 
     const auto result = adapter.ExecuteQuery(q);
     REQUIRE(result.ok());
@@ -435,18 +394,14 @@ TEST_CASE("SQLiteAdapter: whereExact no match returns empty", "[sqlite]")
     auto adapter = MakeSeededAdapter();
 
     Adapters::DataQuery q;
-    q.table               = "people";
-    q.pageSize            = 100;
-    q.whereExact["name"]  = "Zaphod";
+    q.table              = "people";
+    q.pageSize           = 100;
+    q.whereExact["name"] = "Zaphod";
 
     const auto result = adapter.ExecuteQuery(q);
     REQUIRE(result.ok());
     CHECK(result.rows.empty());
 }
-
-// ============================================================
-//  ExecuteQuery — substring search
-// ============================================================
 
 TEST_CASE("SQLiteAdapter: searchColumn/searchValue LIKE filter", "[sqlite]")
 {
@@ -456,17 +411,13 @@ TEST_CASE("SQLiteAdapter: searchColumn/searchValue LIKE filter", "[sqlite]")
     q.table        = "people";
     q.pageSize     = 100;
     q.searchColumn = "name";
-    q.searchValue  = "lice";   // matches 'Alice' only (not 'Charlie')
+    q.searchValue  = "lice"; // matches 'Alice' only (not 'Charlie')
 
     const auto result = adapter.ExecuteQuery(q);
     REQUIRE(result.ok());
     REQUIRE(result.rows.size() == 1);
     CHECK(result.rows[0][1] == "Alice");
 }
-
-// ============================================================
-//  CountQuery
-// ============================================================
 
 TEST_CASE("SQLiteAdapter: CountQuery returns total rows", "[sqlite]")
 {
@@ -493,7 +444,7 @@ TEST_CASE("SQLiteAdapter: CountQuery respects whereExact filter", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: CountQuery on empty table is 0", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    Adapters::SQLiteAdapter    adapter;
     Adapters::ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
@@ -504,10 +455,6 @@ TEST_CASE("SQLiteAdapter: CountQuery on empty table is 0", "[sqlite]")
     q.table = "empty_t";
     CHECK(adapter.CountQuery(q) == 0);
 }
-
-// ============================================================
-//  Execute — raw SQL
-// ============================================================
 
 TEST_CASE("SQLiteAdapter: Execute SELECT returns rows", "[sqlite]")
 {
@@ -524,7 +471,7 @@ TEST_CASE("SQLiteAdapter: Execute SELECT returns rows", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: Execute CREATE TABLE returns ok with 0 rows", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    Adapters::SQLiteAdapter    adapter;
     Adapters::ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
@@ -536,7 +483,7 @@ TEST_CASE("SQLiteAdapter: Execute CREATE TABLE returns ok with 0 rows", "[sqlite
 
 TEST_CASE("SQLiteAdapter: Execute INSERT reflects rowsAffected", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    Adapters::SQLiteAdapter    adapter;
     Adapters::ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
@@ -549,7 +496,7 @@ TEST_CASE("SQLiteAdapter: Execute INSERT reflects rowsAffected", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: Execute invalid SQL returns error result", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    Adapters::SQLiteAdapter    adapter;
     Adapters::ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
@@ -561,18 +508,14 @@ TEST_CASE("SQLiteAdapter: Execute invalid SQL returns error result", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: Execute on disconnected adapter returns error", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;   // never connected
-    const auto result = adapter.Execute("SELECT 1");
+    Adapters::SQLiteAdapter adapter; // never connected
+    const auto              result = adapter.Execute("SELECT 1");
     CHECK_FALSE(result.ok());
 }
 
-// ============================================================
-//  NULL handling
-// ============================================================
-
 TEST_CASE("SQLiteAdapter: NULL column values become empty strings", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    Adapters::SQLiteAdapter    adapter;
     Adapters::ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
@@ -591,13 +534,9 @@ TEST_CASE("SQLiteAdapter: NULL column values become empty strings", "[sqlite]")
     REQUIRE(result.ok());
     REQUIRE(result.rows.size() == 2);
 
-    CHECK(result.rows[0][1] == "");        // NULL → empty string
+    CHECK(result.rows[0][1] == ""); // NULL → empty string
     CHECK(result.rows[1][1] == "present");
 }
-
-// ============================================================
-//  Execution timing
-// ============================================================
 
 TEST_CASE("SQLiteAdapter: executionMs is populated", "[sqlite]")
 {

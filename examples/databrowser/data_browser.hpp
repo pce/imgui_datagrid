@@ -1,41 +1,22 @@
 #pragma once
-/// DataBrowser — generic data-browser panel that works with any IDataSource adapter.
-/// See docs/databrowser.md for the full usage guide.
-///
-///  ┌──────────────────────────────────────────────────────────┐
-///  │ [toolbar: adapter label | sidebar toggle | status]       │
-///  ├──────────────┬───────────────────────────────────────────┤
-///  │              │  [SQL editor strip — collapsible]         │
-///  │  Sidebar     ├───────────────────────────────────────────┤
-///  │  ─────────   │                                           │
-///  │  Tables      │         DataGrid                          │
-///  │  ─────────   │                                           │
-///  │  Filters     │                                           │
-///  │  ─────────   ├───────────────────────────────────────────┤
-///  │  Columns     │  [pagination bar]                         │
-///  └──────────────┴───────────────────────────────────────────┘
-
-#include "imgui_datagrid.hpp"
 #include "adapters/data_source.hpp"
-#include "responsive_layout.hpp"
+#include "imgui_datagrid.hpp"
 #include "inspector/schema_inspector.hpp"
+#include "ui/hex_view.hpp"
+#include "ui/responsive_layout.hpp"
+#include "ui/sql_editor.hpp"
 
 #include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
-
-class DataBrowser {
-public:
-    // ── Construction ──────────────────────────────────────────────────────────
-
+class DataBrowser
+{
+  public:
     /// Construct with an already-connected data source.
     /// The browser takes ownership of the adapter.
-    explicit DataBrowser(
-        Adapters::DataSourcePtr source,
-        const std::string&      windowTitle = "Data Browser"
-    );
+    explicit DataBrowser(Adapters::DataSourcePtr source, const std::string& windowTitle = "Data Browser");
 
     ~DataBrowser() = default;
 
@@ -44,22 +25,16 @@ public:
     DataBrowser& operator=(const DataBrowser&) = delete;
 
     // Non-movable — SchemaInspector member explicitly deletes its move ops.
-    DataBrowser(DataBrowser&&)                 = delete;
-    DataBrowser& operator=(DataBrowser&&)      = delete;
-
-    // ── Responsive layout ─────────────────────────────────────────────────────
+    DataBrowser(DataBrowser&&)            = delete;
+    DataBrowser& operator=(DataBrowser&&) = delete;
 
     /// Inject the current layout before calling Render().
-    void SetLayout(const ResponsiveLayout& layout);
-
-    // ── Column customisation ──────────────────────────────────────────────────
+    void SetLayout(const UI::ResponsiveLayout& layout);
 
     /// Callback invoked once after columns are built from the adapter schema.
     /// Use it to set per-column widths, types, renderers, and visibility.
     using ColumnCustomizer = std::function<void(std::vector<ImGuiExt::ColumnDef>&)>;
     void SetColumnCustomizer(ColumnCustomizer fn);
-
-    // ── Pre-content hook (adapter-specific toolbar/nav bar) ───────────────────
 
     /// Rendered once per frame inside the DataBrowser window, between the toolbar
     /// and the main sidebar/grid layout.  Use it to inject adapter-specific UI
@@ -68,37 +43,27 @@ public:
     using PreContentHook = std::function<void()>;
     void SetPreContentHook(PreContentHook fn);
 
-    // ── Row callbacks ─────────────────────────────────────────────────────────
-
     /// Receives the zero-based row index into the current page and the row data.
     using RowCallback = std::function<void(int rowIdx, const std::vector<std::string>& row)>;
-    void SetOnRowClick   (RowCallback fn);
+    void SetOnRowClick(RowCallback fn);
     void SetOnRowDblClick(RowCallback fn);
-
-    // ── Per-frame entry point ─────────────────────────────────────────────────
 
     /// Call once per frame inside your ImGui begin/end block.
     /// Manages its own ImGui::Begin / ImGui::End.
     void Render();
 
-    // ── Inspector ─────────────────────────────────────────────────────────────
-
     /// Open the schema inspector for the given table, or the current table
     /// if tableName is empty.  Safe to call from UI callbacks.
     void OpenInspector(const std::string& tableName = "");
-
-    // ── Runtime adapter swap ──────────────────────────────────────────────────
 
     /// Replace the current data source at runtime (e.g. user opens a different
     /// file).  Resets all query state and triggers a full re-initialise.
     void SetDataSource(Adapters::DataSourcePtr source);
 
-    // ── Accessors ─────────────────────────────────────────────────────────────
-
-    [[nodiscard]] bool        IsConnected()  const;
+    [[nodiscard]] bool        IsConnected() const;
     [[nodiscard]] std::string AdapterLabel() const;
-    [[nodiscard]] std::string WindowTitle()  const;
-    void SetWindowTitle(const std::string& title);
+    [[nodiscard]] std::string WindowTitle() const;
+    void                      SetWindowTitle(const std::string& title);
 
     /// Navigate to `tableOrPath` — equivalent to clicking the table in the
     /// sidebar.  For filesystem adapters `tableOrPath` is the directory path.
@@ -108,100 +73,144 @@ public:
     /// adapter-specific types in callbacks / hooks.  Never nullptr while connected.
     [[nodiscard]] Adapters::IDataSource* GetSource() const;
 
-    // ── Inspector forwarding ──────────────────────────────────────────────────
     [[nodiscard]] bool IsInspectorOpen() const;
     void               CloseInspector();
 
     /// Force a data reload on the next Render() call.
     void InvalidateData();
 
-private:
-    // ── Sub-panel renderers ───────────────────────────────────────────────────
+    /// Enable row dragging. The callback is called inside ImGui::BeginDragDropSource —
+    /// it must call ImGui::SetDragDropPayload() and may render a drag-preview tooltip.
+    using DragSourceCallback = std::function<void(int rowIdx, const std::vector<std::string>& row)>;
+    void SetDragSourceCallback(DragSourceCallback fn);
+
+    /// Set a drop handler. Called when a payload is dropped on the DataGrid area.
+    /// `payloadType` is the ImGui type string; `data`/`dataSize` is the raw payload.
+    using DropHandler = std::function<void(const char* payloadType, const void* data, std::size_t dataSize)>;
+    void SetDropHandler(DropHandler fn);
+
+    /// Open-file callback — invoked from the row context menu when the user selects
+    /// an "Open …" item.  `how` is one of:
+    ///   "auto"    — smart dispatch (App decides based on content / extension)
+    ///   "image"   — open in image viewer
+    ///   "text"    — open in text viewer
+    ///   "sqlite"  — open as SQLite database
+    ///   "hex"     — inspect raw bytes in hex view
+    ///   "system"  — hand off to the OS default application
+    using OpenCallback = std::function<void(const std::string& path, const std::string& how)>;
+    void SetOpenCallback(OpenCallback fn);
+
+    /// Column keys for the current table (order matches GetSource()->GetColumns()).
+    /// Used by drag-source callbacks to build the key=value row encoding.
+    [[nodiscard]] std::vector<std::string> GetCurrentColumnKeys() const;
+
+    /// Read-only access to the rows currently displayed (current page).
+    [[nodiscard]] const std::vector<std::vector<std::string>>& GetCurrentRows() const { return rows; }
+
+    /// Zero-based index of the column whose key matches `key`, or -1 if not found.
+    [[nodiscard]] int GetColumnIndex(const std::string& key) const
+    {
+        for (int i = 0; i < static_cast<int>(columns.size()); ++i)
+            if (columns[i].key == key) return i;
+        return -1;
+    }
+
+    [[nodiscard]] std::string CurrentTable() const;
+
+    /// Zero-based instance ID (unique per DataBrowser lifetime).
+    [[nodiscard]] int InstanceId() const { return instanceId_; }
+
+    /// True when this DataBrowser window was focused during the last rendered frame.
+    /// Updated inside Render() — one frame lag is expected and acceptable.
+    [[nodiscard]] bool IsFocused() const { return focused_; }
+
+    /// The full ImGui window-ID string passed to ImGui::Begin() every frame.
+    /// Use with ImGui::SetWindowFocus() to bring this window to the front.
+    [[nodiscard]] std::string ImGuiWindowId() const;
+
+    /// If the schema inspector is open, returns its ImGui window ID for SetWindowFocus.
+    /// Returns an empty string when the inspector is closed or has no data yet.
+    [[nodiscard]] std::string InspectorImGuiWindowId() const;
+
+    /// Display label of the inspector's current table, or empty if not open.
+    [[nodiscard]] std::string InspectorWindowLabel() const;
+
+  private:
     void DrawToolbar();
     void DrawSidebar();
-    void DrawSidebarContent();  ///< Shared by sidebar panel and phone overlay
-    void DrawPhoneOverlay();    ///< Full-screen sidebar overlay for Phone layout
+    void DrawSidebarContent(); ///< Shared by sidebar panel and phone overlay
+    void DrawPhoneOverlay();   ///< Full-screen sidebar overlay for Phone layout
     void DrawMainContent();
-    void DrawSqlEditor();
     void RenderInsertPopup();
     void RenderDeleteConfirm();
 
-    // ── Data helpers ──────────────────────────────────────────────────────────
-    void LoadSchema();                             ///< Load tables from adapter; refresh sidebar list
+    void LoadSchema();                              ///< Load tables from adapter; refresh sidebar list
     void SelectTable(const std::string& tableName); ///< Rebuild columns, reset pagination
-    void BuildColumns();                           ///< Rebuild columns from adapter schema + customizer
-    void RefreshData();                            ///< Re-execute current query; update rows + totalRows
+    void BuildColumns();                            ///< Rebuild columns from adapter schema + customizer
+    void RefreshData();                             ///< Re-execute current query; update rows + totalRows
 
-    // ── Data source ───────────────────────────────────────────────────────────
-    Adapters::DataSourcePtr               source;
+    Adapters::DataSourcePtr source;
 
-    // ── Query state ───────────────────────────────────────────────────────────
-    Adapters::DataQuery                   query;
-    int                                   totalRows     = 0;
+    Adapters::DataQuery query;
+    int                 totalRows = 0;
 
-    // ── View data (current page) ──────────────────────────────────────────────
     std::vector<ImGuiExt::ColumnDef>      columns;
     std::vector<std::vector<std::string>> rows;
     ImGuiExt::DataGridState               gridState;
 
-    // ── Schema cache ──────────────────────────────────────────────────────────
-    std::vector<Adapters::TableInfo>      tables;
+    std::vector<Adapters::TableInfo> tables;
 
-    // ── Responsive layout ─────────────────────────────────────────────────────
-    ResponsiveLayout                      layout_;
+    UI::ResponsiveLayout layout_;
 
-    // ── Sidebar UI state ──────────────────────────────────────────────────────
-    bool                                  showSidebar       = true;
-    bool                                  phoneOverlayOpen_ = false;
+    bool        showSidebar       = true;
+    bool        phoneOverlayOpen_ = false;
 
     // Exact-match filter (maps to DataQuery::whereExact)
-    std::string                           filterColumn;
-    char                                  filterBuf[256]  = {};
+    std::string filterColumn;
+    char        filterBuf[256] = {};
 
     // Substring search (maps to DataQuery::searchColumn / searchValue)
-    std::string                           searchColumn;
-    char                                  searchBuf[256]  = {};
+    std::string searchColumn;
+    char        searchBuf[256] = {};
 
-    // ── SQL editor state ──────────────────────────────────────────────────────
-    bool                                  showSqlEditor = false;
-    char                                  sqlBuf[2048]  = {};
-    std::string                           sqlError;
-    std::string                           sqlStatus;    ///< e.g. "42 rows  (3.1 ms)"
+    UI::SqlEditorState sqlEditor_; ///< Embedded SQL editor widget state
 
-    // ── Status ────────────────────────────────────────────────────────────────
-    std::string                           lastError;
-    std::string                           statusMsg;
+    std::string lastError;
+    std::string statusMsg;
 
-    // ── Misc ──────────────────────────────────────────────────────────────────
-    std::string                           windowTitle;
-    bool                                  needsRefresh  = false;
+    std::string windowTitle;
+    bool        needsRefresh = false;
 
-    // ── Edit mode ─────────────────────────────────────────────────────────
-    bool        editMode_  = false;   ///< Toggled by the ✎ toolbar button
-    std::string editError_;           ///< Last UpdateRow error message, if any
+    bool        editMode_ = false; ///< Toggled by the ✎ toolbar button
+    bool        focused_  = false; ///< True when this DataBrowser window had focus last frame
+    std::string editError_;        ///< Last UpdateRow error message, if any
 
-    // ── CRUD popup state ──────────────────────────────────────────────────────
-    bool        showInsertPopup_    = false;
-    bool        showDeleteConfirm_  = false;
-    struct InsertField { char buf[256] = {}; };
-    std::vector<InsertField> insertFields_;  ///< One slot per column, rebuilt on popup open
-    std::string crudError_;
+    bool showInsertPopup_   = false;
+    bool showDeleteConfirm_ = false;
+    struct InsertField
+    {
+        char buf[256] = {};
+    };
+    std::vector<InsertField> insertFields_; ///< One slot per column, rebuilt on popup open
+    std::string              crudError_;
 
-    bool                                  columnsReady  = false;
-    bool                                  schemaLoaded  = false;
+    bool columnsReady = false;
+    bool schemaLoaded = false;
 
-    // ── Inspector ─────────────────────────────────────────────────────────────
-    Inspector::SchemaInspector            inspector_;
+    Inspector::SchemaInspector inspector_;
+    UI::HexViewDialog          hexView_; ///< Byte-inspector popup (context menu → Inspect Bytes…)
 
-    // ── Callbacks ─────────────────────────────────────────────────────────────
-    ColumnCustomizer                      columnCustomizer;
-    RowCallback                           onRowClick;
-    RowCallback                           onRowDblClick;
+    ColumnCustomizer columnCustomizer;
+    RowCallback      onRowClick;
+    RowCallback      onRowDblClick;
 
     PreContentHook preContentHook_;
 
-    // ── Unique instance ID (keeps ImGui window IDs distinct when two browsers open) ──
+    DragSourceCallback dragSourceCb_;
+    DropHandler        dropHandler_;
+    OpenCallback       openCb_;
+
     int         instanceId_;
-    std::string idSuffix_;       ///< "_N" — appended to ImGui IDs
-    static int  nextInstanceId_; ///< static counter, incremented in constructor
+    std::string idSuffix_; ///< "_N" — appended to ImGui IDs
+    static int  nextInstanceId_;
 };

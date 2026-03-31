@@ -1,41 +1,37 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-// Including the adapter headers forces their REGISTER_ADAPTER static
+// Including the adapter headers forces their RegisterAdapter<T> static
 // initialisers to run before the tests execute, exactly as they would
 // in the real application binary.
-#include "adapters/sqlite/sqlite_adapter.hpp"
-#include "adapters/csv/csv_adapter.hpp"
 #include "adapters/adapter_registry.hpp"
+#include "adapters/csv/csv_adapter.hpp"
+#include "adapters/sqlite/sqlite_adapter.hpp"
 
 #include <filesystem>
 #include <fstream>
 
 namespace fs = std::filesystem;
 
-// ============================================================
-//  Helpers
-// ============================================================
-
 static fs::path WriteTempCsv(const std::string& name, const std::string& content)
 {
     const fs::path p = fs::temp_directory_path() / name;
-    std::ofstream f(p, std::ios::out | std::ios::trunc);
+    std::ofstream  f(p, std::ios::out | std::ios::trunc);
     f << content;
     return p;
 }
 
-struct TempFile {
+struct TempFile
+{
     fs::path path;
-    TempFile(const std::string& name, const std::string& content)
-        : path(WriteTempCsv(name, content)) {}
-    ~TempFile() { std::error_code ec; fs::remove(path, ec); }
+    TempFile(const std::string& name, const std::string& content) : path(WriteTempCsv(name, content)) {}
+    ~TempFile()
+    {
+        std::error_code ec;
+        fs::remove(path, ec);
+    }
     std::string str() const { return path.string(); }
 };
-
-// ============================================================
-//  Self-registration (REGISTER_ADAPTER macro)
-// ============================================================
 
 TEST_CASE("AdapterRegistry: sqlite adapter is self-registered", "[registry]")
 {
@@ -51,12 +47,8 @@ TEST_CASE("AdapterRegistry: unknown adapter name returns false", "[registry]")
 {
     CHECK_FALSE(Adapters::AdapterRegistry::Has("nonexistent_adapter_xyz"));
     CHECK_FALSE(Adapters::AdapterRegistry::Has(""));
-    CHECK_FALSE(Adapters::AdapterRegistry::Has("SQLITE"));   // case-sensitive
+    CHECK_FALSE(Adapters::AdapterRegistry::Has("SQLITE")); // case-sensitive
 }
-
-// ============================================================
-//  RegisteredAdapters / Count
-// ============================================================
 
 TEST_CASE("AdapterRegistry: RegisteredAdapters includes sqlite and csv", "[registry]")
 {
@@ -65,8 +57,10 @@ TEST_CASE("AdapterRegistry: RegisteredAdapters includes sqlite and csv", "[regis
     bool hasSqlite = false;
     bool hasCsv    = false;
     for (const auto& n : names) {
-        if (n == "sqlite") hasSqlite = true;
-        if (n == "csv")    hasCsv    = true;
+        if (n == "sqlite")
+            hasSqlite = true;
+        if (n == "csv")
+            hasCsv = true;
     }
 
     CHECK(hasSqlite);
@@ -77,17 +71,13 @@ TEST_CASE("AdapterRegistry: RegisteredAdapters returns sorted list", "[registry]
 {
     const auto names = Adapters::AdapterRegistry::RegisteredAdapters();
     for (size_t i = 1; i < names.size(); ++i)
-        CHECK(names[i - 1] <= names[i]);   // lexicographically non-decreasing
+        CHECK(names[i - 1] <= names[i]); // lexicographically non-decreasing
 }
 
 TEST_CASE("AdapterRegistry: Count is at least 2 (sqlite + csv)", "[registry]")
 {
     CHECK(Adapters::AdapterRegistry::Count() >= 2);
 }
-
-// ============================================================
-//  Create
-// ============================================================
 
 TEST_CASE("AdapterRegistry: Create(sqlite) returns a non-null, unconnected adapter", "[registry]")
 {
@@ -124,10 +114,6 @@ TEST_CASE("AdapterRegistry: Create returns a fresh instance each call", "[regist
     CHECK(a.get() != b.get());
 }
 
-// ============================================================
-//  CreateConnected — sqlite in-memory
-// ============================================================
-
 TEST_CASE("AdapterRegistry: CreateConnected with :memory: returns connected sqlite adapter", "[registry]")
 {
     Adapters::ConnectionParams params;
@@ -152,10 +138,6 @@ TEST_CASE("AdapterRegistry: CreateConnected error is empty on success", "[regist
     REQUIRE(ds.has_value());
 }
 
-// ============================================================
-//  CreateConnected — sqlite bad path
-// ============================================================
-
 TEST_CASE("AdapterRegistry: CreateConnected with bad sqlite path returns nullptr + error", "[registry]")
 {
     Adapters::ConnectionParams params;
@@ -175,14 +157,8 @@ TEST_CASE("AdapterRegistry: CreateConnected nullptr outError is safe", "[registr
     params.connectionString = "/definitely/not/a/valid/path.db";
 
     // Must not crash when outError is nullptr
-    REQUIRE_NOTHROW(
-        Adapters::AdapterRegistry::CreateConnected("sqlite", params)
-    );
+    REQUIRE_NOTHROW(Adapters::AdapterRegistry::CreateConnected("sqlite", params));
 }
-
-// ============================================================
-//  CreateConnected — csv adapter
-// ============================================================
 
 TEST_CASE("AdapterRegistry: CreateConnected with valid csv file returns connected adapter", "[registry]")
 {
@@ -211,10 +187,6 @@ TEST_CASE("AdapterRegistry: CreateConnected with missing csv file returns nullpt
     CHECK_FALSE(ds.error().empty());
 }
 
-// ============================================================
-//  CreateConnected — unknown adapter
-// ============================================================
-
 TEST_CASE("AdapterRegistry: CreateConnected with unknown adapter name returns nullptr", "[registry]")
 {
     Adapters::ConnectionParams params;
@@ -228,10 +200,6 @@ TEST_CASE("AdapterRegistry: CreateConnected with unknown adapter name returns nu
     CHECK_THAT(ds.error(), Catch::Matchers::ContainsSubstring("postgres"));
 }
 
-// ============================================================
-//  Runtime registration
-// ============================================================
-
 TEST_CASE("AdapterRegistry: Register adds a new factory at runtime", "[registry]")
 {
     const std::string testKey = "test_runtime_adapter_xyz";
@@ -240,9 +208,8 @@ TEST_CASE("AdapterRegistry: Register adds a new factory at runtime", "[registry]
     REQUIRE_FALSE(Adapters::AdapterRegistry::Has(testKey));
 
     // Register a factory that creates a SQLiteAdapter under a custom name
-    Adapters::AdapterRegistry::Register(testKey, []() -> Adapters::DataSourcePtr {
-        return std::make_unique<Adapters::SQLiteAdapter>();
-    });
+    Adapters::AdapterRegistry::Register(
+        testKey, []() -> Adapters::DataSourcePtr { return std::make_unique<Adapters::SQLiteAdapter>(); });
 
     REQUIRE(Adapters::AdapterRegistry::Has(testKey));
 
@@ -251,9 +218,7 @@ TEST_CASE("AdapterRegistry: Register adds a new factory at runtime", "[registry]
 
     // Clean up: re-register with nullptr-returning lambda to avoid
     // pollution across tests (map entry stays but factory is safe to call)
-    Adapters::AdapterRegistry::Register(testKey, []() -> Adapters::DataSourcePtr {
-        return nullptr;
-    });
+    Adapters::AdapterRegistry::Register(testKey, []() -> Adapters::DataSourcePtr { return nullptr; });
 }
 
 TEST_CASE("AdapterRegistry: Register overwrites an existing factory", "[registry]")
@@ -261,32 +226,24 @@ TEST_CASE("AdapterRegistry: Register overwrites an existing factory", "[registry
     const std::string overwriteKey = "test_overwrite_adapter_xyz";
 
     // First factory: returns a SQLiteAdapter
-    Adapters::AdapterRegistry::Register(overwriteKey, []() -> Adapters::DataSourcePtr {
-        return std::make_unique<Adapters::SQLiteAdapter>();
-    });
+    Adapters::AdapterRegistry::Register(
+        overwriteKey, []() -> Adapters::DataSourcePtr { return std::make_unique<Adapters::SQLiteAdapter>(); });
 
     auto first = Adapters::AdapterRegistry::Create(overwriteKey);
     REQUIRE(first != nullptr);
     CHECK(first->AdapterName() == "sqlite");
 
     // Second factory: returns a CsvAdapter
-    Adapters::AdapterRegistry::Register(overwriteKey, []() -> Adapters::DataSourcePtr {
-        return std::make_unique<Adapters::CsvAdapter>();
-    });
+    Adapters::AdapterRegistry::Register(
+        overwriteKey, []() -> Adapters::DataSourcePtr { return std::make_unique<Adapters::CsvAdapter>(); });
 
     auto second = Adapters::AdapterRegistry::Create(overwriteKey);
     REQUIRE(second != nullptr);
     CHECK(second->AdapterName() == "csv");
 
     // Clean up
-    Adapters::AdapterRegistry::Register(overwriteKey, []() -> Adapters::DataSourcePtr {
-        return nullptr;
-    });
+    Adapters::AdapterRegistry::Register(overwriteKey, []() -> Adapters::DataSourcePtr { return nullptr; });
 }
-
-// ============================================================
-//  Round-trip: create → connect → query
-// ============================================================
 
 TEST_CASE("AdapterRegistry: full round-trip sqlite create→connect→query", "[registry][integration]")
 {
@@ -299,9 +256,7 @@ TEST_CASE("AdapterRegistry: full round-trip sqlite create→connect→query", "[
     REQUIRE((*ds)->IsConnected());
 
     // Create a table and insert a row
-    auto createResult = (*ds)->Execute(
-        "CREATE TABLE items (id INTEGER PRIMARY KEY, label TEXT NOT NULL)"
-    );
+    auto createResult = (*ds)->Execute("CREATE TABLE items (id INTEGER PRIMARY KEY, label TEXT NOT NULL)");
     CHECK(createResult.ok());
 
     auto insertResult = (*ds)->Execute("INSERT INTO items VALUES (1, 'hello')");
@@ -324,10 +279,10 @@ TEST_CASE("AdapterRegistry: full round-trip sqlite create→connect→query", "[
 TEST_CASE("AdapterRegistry: full round-trip csv create→connect→query", "[registry][integration]")
 {
     TempFile tmp("reg_roundtrip.csv",
-        "product,price,in_stock\n"
-        "Widget,9.99,true\n"
-        "Gadget,49.99,false\n"
-        "Doohickey,1.99,true\n");
+                 "product,price,in_stock\n"
+                 "Widget,9.99,true\n"
+                 "Gadget,49.99,false\n"
+                 "Doohickey,1.99,true\n");
 
     Adapters::ConnectionParams params;
     params.adapterName      = "csv";

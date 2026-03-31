@@ -44,6 +44,8 @@ add_executable(datagrid_tests
     test_csv_adapter.cpp
     test_sqlite_adapter.cpp
     test_adapter_registry.cpp
+    test_fluent_query.cpp
+    test_filesystem_adapter.cpp
 )
 
 target_compile_features(datagrid_tests PRIVATE cxx_std_17)
@@ -58,7 +60,42 @@ target_link_libraries(datagrid_tests
         Catch2::Catch2WithMain
 )
 
+if (TARGET datagrid_asan)
+    target_link_libraries(datagrid_tests PRIVATE datagrid_asan)
+endif()
+
+if (TARGET datagrid_ubsan)
+    target_link_libraries(datagrid_tests PRIVATE datagrid_ubsan)
+endif()
+
+# ── ImGui DataGrid test executable ───────────────────────────────────────────
+# Separate binary so it can link imgui_datagrid_lib (which pulls in imgui).
+add_executable(datagrid_imgui_tests
+    test_imgui_datagrid.cpp
+)
+
+target_compile_features(datagrid_imgui_tests PRIVATE cxx_std_23)
+
+target_compile_definitions(datagrid_imgui_tests PRIVATE IMGUI_DATAGRID_USE_JSON)
+
+target_link_libraries(datagrid_imgui_tests
+    PRIVATE
+        imgui_datagrid_lib
+        datagrid_adapters
+        nlohmann_json::nlohmann_json
+        Catch2::Catch2WithMain
+)
+
+if (TARGET datagrid_asan)
+    target_link_libraries(datagrid_imgui_tests PRIVATE datagrid_asan)
+endif()
+
+if (TARGET datagrid_ubsan)
+    target_link_libraries(datagrid_imgui_tests PRIVATE datagrid_ubsan)
+endif()
+
 # ── CTest integration ─────────────────────────────────────────────────────────
 include(CTest)
 include(Catch)
-catch_discover_tests(datagrid_tests)
+catch_discover_tests(datagrid_tests       DISCOVERY_MODE PRE_TEST)
+catch_discover_tests(datagrid_imgui_tests DISCOVERY_MODE PRE_TEST)

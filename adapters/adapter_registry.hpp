@@ -10,19 +10,21 @@ namespace Adapters {
 
 using MakeAdapterFn = DataSourcePtr (*)();
 
-struct AdapterEntry {
+struct AdapterEntry
+{
     std::string   name;
     MakeAdapterFn make;
 };
 
-class AdapterRegistry {
-public:
+class AdapterRegistry
+{
+  public:
     static void Register(std::string_view name, MakeAdapterFn make);
 
     [[nodiscard]] static DataSourcePtr Create(std::string_view name);
 
-    [[nodiscard]] static std::expected<DataSourcePtr, std::string>
-        CreateConnected(std::string_view name, const ConnectionParams& params);
+    [[nodiscard]] static std::expected<DataSourcePtr, std::string> CreateConnected(std::string_view        name,
+                                                                                   const ConnectionParams& params);
 
     [[nodiscard]] static bool Has(std::string_view name) noexcept;
 
@@ -32,40 +34,32 @@ public:
 
     [[nodiscard]] static int Count() noexcept;
 
-private:
+  private:
     AdapterRegistry() = delete;
     static std::vector<AdapterEntry>& Table() noexcept;
 };
 
-template <typename Derived>
-struct AutoRegister {
-    static const bool registered_;
-    static bool DoRegister() {
-        AdapterRegistry::Register(
-            Derived::AdapterKey,
-            +[]() -> DataSourcePtr { return std::make_unique<Derived>(); }
-        );
-        return true;
+// Declare one namespace-scope static per adapter .cpp to register it with
+// AdapterRegistry before main() runs:
+//
+//   namespace {
+//       const Adapters::RegisterAdapter<MyAdapter> kReg{ "myadapter" };
+//   }
+//
+// The non-capturing lambda converts to a raw function pointer via the unary
+// `+` operator — zero heap allocation, zero std::function overhead.
+//
+// RegisterAdapter is non-copyable and non-movable; it is only meaningful as
+// a namespace-scope static with static storage duration.
+template<typename TAdapter>
+struct RegisterAdapter
+{
+    explicit RegisterAdapter(std::string_view name) noexcept
+    {
+        AdapterRegistry::Register(name, +[]() -> DataSourcePtr { return std::make_unique<TAdapter>(); });
     }
+    RegisterAdapter(const RegisterAdapter&)            = delete;
+    RegisterAdapter& operator=(const RegisterAdapter&) = delete;
 };
 
-template <typename Derived>
-const bool AutoRegister<Derived>::registered_ = AutoRegister<Derived>::DoRegister();
-
-}
-
-#define REGISTER_ADAPTER_IMPL(Counter, AdapterClass, AdapterName)        \
-    namespace {                                                          \
-        static const bool _auto_reg_##Counter = []() -> bool {           \
-            ::Adapters::AdapterRegistry::Register(                       \
-                AdapterName,                                             \
-                +[]() -> ::Adapters::DataSourcePtr {                     \
-                    return std::make_unique<AdapterClass>();              \
-                }                                                        \
-            );                                                           \
-            return true;                                                 \
-        }();                                                             \
-    }
-
-#define REGISTER_ADAPTER(AdapterClass, AdapterName) \
-    REGISTER_ADAPTER_IMPL(__COUNTER__, AdapterClass, AdapterName)
+} // namespace Adapters

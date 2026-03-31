@@ -1,0 +1,80 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {"major": 3, "minor": 25, "patch": 0},
+  "configurePresets": [
+    {
+      "name": "llvm-base",
+      "hidden": true,
+      "displayName": "LLVM base (~/toolchains/llvm-*)",
+      "description": "Common LLVM toolchain + ccache + DuckDB; binaryDir fixed to build/ so _deps land in build/_deps",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "DATAGRID_ENABLE_CCACHE":        "ON",
+        "DATAGRID_USE_DUCKDB":           "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_C_COMPILER":   "$env{LLVM_TOOLCHAIN_PATH}/bin/clang",
+        "CMAKE_CXX_COMPILER": "$env{LLVM_TOOLCHAIN_PATH}/bin/clang++"
+      }
+    },
+    {
+      "name": "default",
+      "displayName": "LLVM (latest ~/toolchains/llvm-*) + ASan/UBSan  [Debug]",
+      "description": "Default: latest LLVM in ~/toolchains/ with Address and Undefined Behavior Sanitizers. LLVM_TOOLCHAIN_PATH auto-set by build.sh",
+      "inherits": "llvm-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":    "Debug",
+        "DATAGRID_ENABLE_ASAN":  "ON",
+        "DATAGRID_ENABLE_UBSAN": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release (LLVM, LTO, no sanitizers)",
+      "description": "Optimised release build with LLVM toolchain; sanitizers disabled",
+      "inherits": "llvm-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":      "Release",
+        "DATAGRID_ENABLE_ASAN":  "OFF",
+        "DATAGRID_ENABLE_UBSAN": "OFF"
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug ASan/UBSan (system toolchain)",
+      "description": "System compiler with Address and Undefined Behavior Sanitizers",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":      "Debug",
+        "DATAGRID_ENABLE_CCACHE":  "ON",
+        "DATAGRID_USE_DUCKDB":     "ON",
+        "DATAGRID_ENABLE_ASAN":    "ON",
+        "DATAGRID_ENABLE_UBSAN":   "ON"
+      }
+    },
+    {
+      "name": "ci-ubuntu",
+      "displayName": "CI Ubuntu (Clang 22 from apt.llvm.org)",
+      "description": "GitHub Actions Ubuntu 24.04 with Clang 22",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE":      "Release",
+        "CMAKE_C_COMPILER":      "clang-22",
+        "CMAKE_CXX_COMPILER":    "clang++-22",
+        "DATAGRID_ENABLE_CCACHE": "ON",
+        "DATAGRID_USE_DUCKDB":    "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "default", "configurePreset": "default" },
+    { "name": "release", "configurePreset": "release" },
+    { "name": "debug",   "configurePreset": "debug"   },
+    { "name": "ci",      "configurePreset": "ci-ubuntu" }
+  ],
+  "testPresets": [
+    { "name": "default", "configurePreset": "default",   "output": {"outputOnFailure": true} },
+    { "name": "release", "configurePreset": "release",   "output": {"outputOnFailure": true} },
+    { "name": "debug",   "configurePreset": "debug",     "output": {"outputOnFailure": true} },
+    { "name": "ci",      "configurePreset": "ci-ubuntu", "output": {"outputOnFailure": true} }
+  ]
+}

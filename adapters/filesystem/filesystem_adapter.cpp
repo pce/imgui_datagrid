@@ -1,5 +1,6 @@
 #include "filesystem_adapter.hpp"
 #include "../adapter_registry.hpp"
+#include "fluent_query.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -11,77 +12,71 @@
 #include <system_error>
 
 #if defined(_WIN32)
-#   define WIN32_LEAN_AND_MEAN
-#   include <windows.h>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #else
-#   include <pwd.h>
-#   include <unistd.h>
+#include <pwd.h>
+#include <unistd.h>
 #endif
 
-// Self-register before main() — no changes to App or main needed.
-REGISTER_ADAPTER(Adapters::FilesystemAdapter, "filesystem")
+namespace {
+const Adapters::RegisterAdapter<Adapters::FilesystemAdapter> kFilesystemReg{"filesystem"};
+}
 
 namespace Adapters {
 
-// ============================================================
-//  Construction
-// ============================================================
-
 FilesystemAdapter::FilesystemAdapter() = default;
-
-// ============================================================
-//  Adapter identity
-// ============================================================
 
 std::string FilesystemAdapter::AdapterLabel() const
 {
-    if (!connected_) return "Filesystem (disconnected)";
-    return "Filesystem  " + currentPath_.string();
+    if (!connected_)
+        return "Filesystem (disconnected)";
+    return std::string{"Filesystem  "} + currentPath_.string() + (readOnly_ ? "  [read-only]" : "");
 }
-
-// ============================================================
-//  Connection lifecycle
-// ============================================================
 
 std::expected<void, Error> FilesystemAdapter::Connect(const ConnectionParams& params)
 {
     Disconnect();
     lastError_.clear();
 
-    const fs::path startPath = params.connectionString.empty()
-        ? HomeDir()
-        : fs::path(params.connectionString);
+    const fs::path startPath = params.connectionString.empty() ? HomeDir() : fs::path(params.connectionString);
 
     std::error_code ec;
     if (!fs::is_directory(startPath, ec)) {
         lastError_ = "Not a directory: " + startPath.string();
-        if (ec) lastError_ += " (" + ec.message() + ")";
+        if (ec)
+            lastError_ += " (" + ec.message() + ")";
         return std::unexpected(lastError_);
     }
 
     const fs::path canonical = fs::canonical(startPath, ec);
-    currentPath_ = ec ? startPath : canonical;
-    connected_   = true;
+    currentPath_             = ec ? startPath : canonical;
+    readOnly_                = params.readOnly.value_or(false);
+    connected_               = true;
     return {};
 }
 
 void FilesystemAdapter::Disconnect()
 {
     connected_ = false;
+    readOnly_  = false;
     currentPath_.clear();
     lastError_.clear();
 }
 
-bool FilesystemAdapter::IsConnected() const { return connected_; }
-std::string FilesystemAdapter::LastError() const { return lastError_; }
-
-// ============================================================
-//  Schema navigation
-// ============================================================
+bool FilesystemAdapter::IsConnected() const
+{
+    return connected_;
+}
+std::string FilesystemAdapter::LastError() const
+{
+    return lastError_;
+}
 
 std::vector<std::string> FilesystemAdapter::GetCatalogs() const
 {
-    if (!connected_) return {};
+    if (!connected_)
+        return {};
 
     std::vector<std::string> catalogs;
 
@@ -100,94 +95,79 @@ std::vector<std::string> FilesystemAdapter::GetCatalogs() const
     return catalogs;
 }
 
-std::vector<TableInfo> FilesystemAdapter::GetTables(
-    const std::string& catalog) const
+std::vector<TableInfo> FilesystemAdapter::GetTables(const std::string& catalog) const
 {
-    if (!connected_) return {};
+    if (!connected_)
+        return {};
 
     const fs::path dir = catalog.empty() ? currentPath_ : fs::path(catalog);
 
     std::vector<TableInfo> tables;
-    std::error_code ec;
+    std::error_code        ec;
 
     fs::directory_iterator it(dir, ec);
-    if (ec) return tables;
+    if (ec)
+        return tables;
 
     for (const auto& entry : it) {
         std::error_code entryEc;
 
-        // Only interested in subdirectories here (the flat listing is
-        // handled by ExecuteQuery; GetTables powers the sidebar tree).
-        if (!entry.is_directory(entryEc) || entryEc) continue;
+        if (!entry.is_directory(entryEc) || entryEc)
+            continue;
 
         const std::string name = entry.path().filename().string();
 
         // Respect the show-hidden setting for sidebar nodes too.
-        if (!showHidden_ && !name.empty() && name[0] == '.') continue;
+        if (!showHidden_ && !name.empty() && name[0] == '.')
+            continue;
 
         TableInfo t;
-        t.name    = entry.path().string();   // full absolute path
+        t.name    = entry.path().string(); // full absolute path
         t.kind    = "dir";
         t.catalog = dir.string();
         tables.push_back(std::move(t));
     }
 
-    std::sort(tables.begin(), tables.end(),
-        [](const TableInfo& a, const TableInfo& b) { return a.name < b.name; });
+    std::sort(tables.begin(), tables.end(), [](const TableInfo& a, const TableInfo& b) { return a.name < b.name; });
 
     return tables;
 }
 
-std::vector<ColumnInfo> FilesystemAdapter::GetColumns(
-    const std::string& /*table*/) const
+std::vector<ColumnInfo> FilesystemAdapter::GetColumns(const std::string& /*table*/) const
 {
-    // Fixed schema for every directory listing.
-    // Column indices used by navigation callbacks:
-    //   0  name         TEXT    filename only
-    //   1  kind         TEXT    "dir" | "file" | "symlink" | "other"
-    //   2  size         TEXT    human-readable, right-aligned
-    //   3  modified     TEXT    "YYYY-MM-DD HH:MM", right-aligned
-    //   4  permissions  TEXT    POSIX rwx string
-    //   5  path         TEXT    absolute path (wire to double-click callback)
     return {
-        { "name",        "TEXT", false, false },
-        { "kind",        "TEXT", false, false },
-        { "size",        "TEXT", true,  false },
-        { "modified",    "TEXT", true,  false },
-        { "permissions", "TEXT", true,  false },
-        { "path",        "TEXT", false, false },
+        {"name", "TEXT", false, false},
+        {"kind", "TEXT", false, false},
+        {"size", "TEXT", true, false},
+        {"modified", "TEXT", true, false},
+        {"permissions", "TEXT", true, false},
+        {"path", "TEXT", false, false},
     };
 }
 
-// ============================================================
-//  Internal: enumerate one directory
-// ============================================================
-
-std::vector<FilesystemEntry>
-FilesystemAdapter::EnumerateDir(const fs::path& dir) const
+std::vector<FilesystemEntry> FilesystemAdapter::EnumerateDir(const fs::path& dir) const
 {
     std::vector<FilesystemEntry> entries;
-    std::error_code ec;
+    std::error_code              ec;
 
     fs::directory_iterator it(dir, ec);
     if (ec) {
         // Store the error but return an empty list — callers show an error row
-        const_cast<std::string&>(lastError_) =
-            "Cannot read directory: " + dir.string() + " (" + ec.message() + ")";
+        const_cast<std::string&>(lastError_) = "Cannot read directory: " + dir.string() + " (" + ec.message() + ")";
         return entries;
     }
 
     for (const auto& de : it) {
-        std::error_code entryEc;
+        std::error_code   entryEc;
         const std::string name = de.path().filename().string();
 
-        if (!showHidden_ && !name.empty() && name[0] == '.') continue;
+        if (!showHidden_ && !name.empty() && name[0] == '.')
+            continue;
 
         FilesystemEntry e;
         e.name = name;
         e.path = de.path().string();
 
-        // ── Determine kind ──────────────────────────────────────────────────
         if (de.is_symlink(entryEc)) {
             e.kind = "symlink";
         } else if (de.is_directory(entryEc)) {
@@ -197,17 +177,18 @@ FilesystemAdapter::EnumerateDir(const fs::path& dir) const
         } else {
             e.kind = "other";
         }
-        if (entryEc) { e.kind = "other"; entryEc.clear(); }
+        if (entryEc) {
+            e.kind = "other";
+            entryEc.clear();
+        }
 
-        // ── Resolve symlink target for metadata if requested ────────────────
         const bool isSymlink = (e.kind == "symlink");
-        fs::path metaPath = de.path();
+        fs::path   metaPath  = de.path();
         if (isSymlink && followSymlinks_) {
             const auto canonical = fs::canonical(de.path(), entryEc);
-            if (!entryEc) {
-                metaPath = canonical;
-                // Kind of the resolved target
-                if (fs::is_directory(metaPath, entryEc))
+                if (!entryEc) {
+                    metaPath = canonical;
+                    if (fs::is_directory(metaPath, entryEc))
                     e.kind = "dir";
                 else if (fs::is_regular_file(metaPath, entryEc))
                     e.kind = "file";
@@ -215,7 +196,6 @@ FilesystemAdapter::EnumerateDir(const fs::path& dir) const
             entryEc.clear();
         }
 
-        // ── Size ────────────────────────────────────────────────────────────
         if (e.kind == "file") {
             const auto sz = fs::file_size(metaPath, entryEc);
             if (!entryEc) {
@@ -226,11 +206,9 @@ FilesystemAdapter::EnumerateDir(const fs::path& dir) const
                 entryEc.clear();
             }
         } else {
-            // Directories and symlinks-to-dirs show an em dash
-            e.sizeStr = "\xe2\x80\x94";   // UTF-8 em dash "—"
+            e.sizeStr = "\xe2\x80\x94"; // UTF-8 em dash "—"
         }
 
-        // ── Modified time ────────────────────────────────────────────────────
         const auto modTime = fs::last_write_time(metaPath, entryEc);
         if (!entryEc) {
             e.modTime  = modTime;
@@ -240,11 +218,8 @@ FilesystemAdapter::EnumerateDir(const fs::path& dir) const
             entryEc.clear();
         }
 
-        // ── Permissions ──────────────────────────────────────────────────────
-        const auto status = followSymlinks_
-            ? fs::status(de.path(), entryEc)
-            : fs::symlink_status(de.path(), entryEc);
-        e.permissions = entryEc ? "?????????" : FormatPerms(status.permissions());
+        const auto status = followSymlinks_ ? fs::status(de.path(), entryEc) : fs::symlink_status(de.path(), entryEc);
+        e.permissions     = entryEc ? "?????????" : FormatPerms(status.permissions());
         entryEc.clear();
 
         entries.push_back(std::move(e));
@@ -253,99 +228,80 @@ FilesystemAdapter::EnumerateDir(const fs::path& dir) const
     return entries;
 }
 
-// ============================================================
-//  Internal: apply DataQuery filters and sort
-// ============================================================
-
-std::vector<FilesystemEntry>
-FilesystemAdapter::ApplyQuery(
-    std::vector<FilesystemEntry> entries,
-    const DataQuery&             q) const
+std::vector<FilesystemEntry> FilesystemAdapter::ApplyQuery(std::vector<FilesystemEntry> entries,
+                                                           const DataQuery&             q) const
 {
-    // ── Exact-match filter (only "kind" makes sense here) ───────────────────
     auto kindIt = q.whereExact.find("kind");
     if (kindIt != q.whereExact.end() && !kindIt->second.empty()) {
         const std::string& wantKind = kindIt->second;
-        entries.erase(
-            std::remove_if(entries.begin(), entries.end(),
-                [&](const FilesystemEntry& e) { return e.kind != wantKind; }),
-            entries.end()
-        );
+        entries.erase(std::remove_if(
+                          entries.begin(), entries.end(), [&](const FilesystemEntry& e) { return e.kind != wantKind; }),
+                      entries.end());
     }
 
-    // ── Substring search (case-insensitive, on "name" or "kind") ───────────
     if (!q.searchColumn.empty() && !q.searchValue.empty()) {
         std::string needle = q.searchValue;
-        for (char& c : needle) c = static_cast<char>(
-            std::tolower(static_cast<unsigned char>(c)));
+        for (char& c : needle)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 
-        entries.erase(
-            std::remove_if(entries.begin(), entries.end(),
-                [&](const FilesystemEntry& e) {
-                    std::string hay = (q.searchColumn == "kind") ? e.kind : e.name;
-                    for (char& c : hay) c = static_cast<char>(
-                        std::tolower(static_cast<unsigned char>(c)));
-                    return hay.find(needle) == std::string::npos;
-                }),
-            entries.end()
-        );
+        std::erase_if(entries,
+                      [&](const FilesystemEntry& e) {
+                          std::string hay = (q.searchColumn == "kind") ? e.kind : e.name;
+                          for (char& c : hay)
+                              c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                          return hay.find(needle) == std::string::npos;
+                      });
     }
 
-    // ── Sort ────────────────────────────────────────────────────────────────
-    //
     // Convention: when sorting by name (or no sort), directories appear
     // before files within each sorted group — the same convention used by
     // macOS Finder, GNOME Files, and most file managers.
-    //
-    const bool asc      = q.sortAscending;
-    const bool byName   = q.sortColumn.empty() || q.sortColumn == "name";
-    const bool bySize   = (q.sortColumn == "size");
-    const bool byMod    = (q.sortColumn == "modified");
-    const bool byKind   = (q.sortColumn == "kind");
+    const bool asc       = q.sortAscending;
+    const bool byName    = q.sortColumn.empty() || q.sortColumn == "name";
+    const bool bySize    = (q.sortColumn == "size");
+    const bool byMod     = (q.sortColumn == "modified");
+    const bool byKind    = (q.sortColumn == "kind");
     const bool dirsFirst = byName || byKind;
 
-    std::stable_sort(entries.begin(), entries.end(),
-        [&](const FilesystemEntry& a, const FilesystemEntry& b)
-        {
-            // Directories always before files unless explicitly sorting by
-            // something other than name
-            if (dirsFirst) {
-                const bool aDir = (a.kind == "dir");
-                const bool bDir = (b.kind == "dir");
-                if (aDir != bDir) return aDir;   // true → a comes first
-            }
-
-            if (bySize) {
-                return asc ? (a.sizeBytes < b.sizeBytes)
-                           : (a.sizeBytes > b.sizeBytes);
-            }
-            if (byMod) {
-                return asc ? (a.modTime < b.modTime)
-                           : (a.modTime > b.modTime);
-            }
-            if (byKind) {
-                return asc ? (a.kind < b.kind) : (a.kind > b.kind);
-            }
-
-            // Default / name: case-insensitive
-            std::string an = a.name, bn = b.name;
-            for (char& c : an) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            for (char& c : bn) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            return asc ? (an < bn) : (an > bn);
+    std::ranges::stable_sort(entries, [&](const FilesystemEntry& a, const FilesystemEntry& b) {
+        // Directories always before files unless explicitly sorting by
+        // something other than name
+        if (dirsFirst) {
+            const bool aDir = (a.kind == "dir");
+            const bool bDir = (b.kind == "dir");
+            if (aDir != bDir)
+                return aDir; // true → a comes first
         }
-    );
+
+        if (bySize) {
+            return asc ? (a.sizeBytes < b.sizeBytes) : (a.sizeBytes > b.sizeBytes);
+        }
+        if (byMod) {
+            return asc ? (a.modTime < b.modTime) : (a.modTime > b.modTime);
+        }
+        if (byKind) {
+            return asc ? (a.kind < b.kind) : (a.kind > b.kind);
+        }
+
+        // Default / name: case-insensitive
+        std::string an = a.name, bn = b.name;
+        for (char& c : an)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        for (char& c : bn)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return asc ? (an < bn) : (an > bn);
+    });
 
     return entries;
 }
 
-// ============================================================
-//  ExecuteQuery / CountQuery / Execute
-// ============================================================
-
 QueryResult FilesystemAdapter::ExecuteQuery(const DataQuery& q) const
 {
     QueryResult result;
-    if (!connected_) { result.error = "Not connected."; return result; }
+    if (!connected_) {
+        result.error = "Not connected.";
+        return result;
+    }
 
     const fs::path dir = q.table.empty() ? currentPath_ : fs::path(q.table);
 
@@ -379,34 +335,55 @@ QueryResult FilesystemAdapter::ExecuteQuery(const DataQuery& q) const
 
 int FilesystemAdapter::CountQuery(const DataQuery& q) const
 {
-    if (!connected_) return 0;
+    if (!connected_)
+        return 0;
 
     const fs::path dir = q.table.empty() ? currentPath_ : fs::path(q.table);
 
     std::error_code ec;
-    if (!fs::is_directory(dir, ec)) return 0;
+    if (!fs::is_directory(dir, ec))
+        return 0;
 
     auto entries = EnumerateDir(dir);
     entries      = ApplyQuery(std::move(entries), q);
     return static_cast<int>(entries.size());
 }
 
-QueryResult FilesystemAdapter::Execute(const std::string& /*sql*/) const
+QueryResult FilesystemAdapter::Execute(const std::string& sql) const
 {
-    QueryResult r;
-    r.error = "FilesystemAdapter does not support raw SQL.\n"
-              "Use ExecuteQuery() with query.table = \"/absolute/path\".";
-    return r;
-}
+    if (!connected_) {
+        QueryResult r;
+        r.error = "Not connected.";
+        return r;
+    }
 
-// ============================================================
-//  Navigation
-// ============================================================
+    // Resolve '.' / '' to the current path before handing off to the parser,
+    // which does not have access to currentPath_.  A proper fix belongs in the
+    // parser; this is a pragmatic shortcut.
+    std::string resolved = sql;
+
+    auto patchPath = [&](std::string s, std::string_view needle, const std::string& replacement) -> std::string {
+        const auto pos = s.find(needle);
+        if (pos != std::string::npos)
+            s.replace(pos, needle.size(), std::string("FROM '") + replacement + "'");
+        return s;
+    };
+    resolved = patchPath(resolved, "FROM .", currentPath_.string());
+    resolved = patchPath(resolved, "FROM '.'", currentPath_.string());
+
+    auto q = Fs::FluentQuery::from_sql(resolved);
+    if (!q) {
+        QueryResult r;
+        r.error = "SQL parse error: " + q.error();
+        return r;
+    }
+    return q->execute();
+}
 
 void FilesystemAdapter::SetCurrentPath(const std::string& absolutePath)
 {
     std::error_code ec;
-    const fs::path p(absolutePath);
+    const fs::path  p(absolutePath);
 
     if (!fs::is_directory(p, ec)) {
         lastError_ = "Not a directory: " + absolutePath;
@@ -415,7 +392,7 @@ void FilesystemAdapter::SetCurrentPath(const std::string& absolutePath)
 
     lastError_.clear();
     const fs::path canonical = fs::canonical(p, ec);
-    currentPath_ = ec ? p : canonical;
+    currentPath_             = ec ? p : canonical;
 }
 
 std::string FilesystemAdapter::GetCurrentPath() const
@@ -433,7 +410,8 @@ std::string FilesystemAdapter::GetParentPath() const
 bool FilesystemAdapter::NavigateUp()
 {
     const fs::path parent = currentPath_.parent_path();
-    if (parent == currentPath_) return false;   // already at root
+    if (parent == currentPath_)
+        return false;
     currentPath_ = parent;
     return true;
 }
@@ -455,25 +433,20 @@ bool FilesystemAdapter::EntryIsFile(const std::string& absolutePath) const
     return fs::is_regular_file(fs::path(absolutePath), ec);
 }
 
-// ============================================================
-//  Bookmarks
-// ============================================================
-
 void FilesystemAdapter::AddBookmark(const std::string& absolutePath)
 {
     std::error_code ec;
-    if (!fs::is_directory(fs::path(absolutePath), ec)) return;
+    if (!fs::is_directory(fs::path(absolutePath), ec))
+        return;
     for (const auto& bm : bookmarks_)
-        if (bm == absolutePath) return;
+        if (bm == absolutePath)
+            return;
     bookmarks_.push_back(absolutePath);
 }
 
 void FilesystemAdapter::RemoveBookmark(const std::string& absolutePath)
 {
-    bookmarks_.erase(
-        std::remove(bookmarks_.begin(), bookmarks_.end(), absolutePath),
-        bookmarks_.end()
-    );
+    bookmarks_.erase(std::ranges::remove(bookmarks_, absolutePath).begin(), bookmarks_.end());
 }
 
 std::vector<std::string> FilesystemAdapter::Bookmarks() const
@@ -481,26 +454,35 @@ std::vector<std::string> FilesystemAdapter::Bookmarks() const
     std::vector<std::string> all;
     all.push_back(HomeDir().string());
     all.push_back(RootDir().string());
-    for (const auto& bm : bookmarks_) all.push_back(bm);
+    for (const auto& bm : bookmarks_)
+        all.push_back(bm);
     return all;
 }
 
-// ============================================================
-//  Options
-// ============================================================
+void FilesystemAdapter::SetShowHidden(bool show)
+{
+    showHidden_ = show;
+}
 
-void FilesystemAdapter::SetShowHidden(bool show)      { showHidden_     = show;   }
-bool FilesystemAdapter::GetShowHidden()         const { return showHidden_;       }
-void FilesystemAdapter::SetFollowSymlinks(bool follow){ followSymlinks_ = follow; }
-bool FilesystemAdapter::GetFollowSymlinks()     const { return followSymlinks_;   }
+bool FilesystemAdapter::GetShowHidden() const
+{
+    return showHidden_;
+}
 
-// ============================================================
-//  Static formatting helpers
-// ============================================================
+void FilesystemAdapter::SetFollowSymlinks(bool follow)
+{
+    followSymlinks_ = follow;
+}
+
+bool FilesystemAdapter::GetFollowSymlinks() const
+{
+    return followSymlinks_;
+}
 
 std::string FilesystemAdapter::FormatSize(std::uintmax_t bytes, bool isDir)
 {
-    if (isDir) return "\xe2\x80\x94";   // UTF-8 "—"
+    if (isDir)
+        return "\xe2\x80\x94"; // UTF-8 "—"
 
     constexpr std::uintmax_t KB = 1024;
     constexpr std::uintmax_t MB = 1024 * KB;
@@ -508,11 +490,16 @@ std::string FilesystemAdapter::FormatSize(std::uintmax_t bytes, bool isDir)
     constexpr std::uintmax_t TB = 1024 * GB;
 
     char buf[32];
-    if      (bytes < KB) std::snprintf(buf, sizeof(buf), "%llu B",  (unsigned long long)bytes);
-    else if (bytes < MB) std::snprintf(buf, sizeof(buf), "%.1f KB", bytes / (double)KB);
-    else if (bytes < GB) std::snprintf(buf, sizeof(buf), "%.1f MB", bytes / (double)MB);
-    else if (bytes < TB) std::snprintf(buf, sizeof(buf), "%.2f GB", bytes / (double)GB);
-    else                 std::snprintf(buf, sizeof(buf), "%.2f TB", bytes / (double)TB);
+    if (bytes < KB)
+        std::snprintf(buf, sizeof(buf), "%llu B", (unsigned long long)bytes);
+    else if (bytes < MB)
+        std::snprintf(buf, sizeof(buf), "%.1f KB", bytes / (double)KB);
+    else if (bytes < GB)
+        std::snprintf(buf, sizeof(buf), "%.1f MB", bytes / (double)MB);
+    else if (bytes < TB)
+        std::snprintf(buf, sizeof(buf), "%.2f GB", bytes / (double)GB);
+    else
+        std::snprintf(buf, sizeof(buf), "%.2f TB", bytes / (double)TB);
     return buf;
 }
 
@@ -523,19 +510,20 @@ std::string FilesystemAdapter::FormatTime(const fs::file_time_type& t)
     // and apply it to the supplied time point.
     using namespace std::chrono;
 
-    const auto delta   = t - fs::file_time_type::clock::now();
-    const auto sysTp   = system_clock::now()
-                         + duration_cast<system_clock::duration>(delta);
-    const std::time_t tt = system_clock::to_time_t(sysTp);
+    const auto        delta = t - fs::file_time_type::clock::now();
+    const auto        sysTp = system_clock::now() + duration_cast<system_clock::duration>(delta);
+    const std::time_t tt    = system_clock::to_time_t(sysTp);
 
 #if defined(_WIN32)
     std::tm tmBuf{};
-    if (localtime_s(&tmBuf, &tt) != 0) return "?";
+    if (localtime_s(&tmBuf, &tt) != 0)
+        return "?";
     std::tm* tp = &tmBuf;
 #else
-    std::tm tmBuf{};
+    std::tm  tmBuf{};
     std::tm* tp = ::localtime_r(&tt, &tmBuf);
-    if (!tp) return "?";
+    if (!tp)
+        return "?";
 #endif
 
     char buf[20];
@@ -545,40 +533,33 @@ std::string FilesystemAdapter::FormatTime(const fs::file_time_type& t)
 
 std::string FilesystemAdapter::FormatPerms(fs::perms p)
 {
-    using P = fs::perms;
-    auto bit = [&](fs::perms mask, char ch) -> char {
-        return (p & mask) != P::none ? ch : '-';
-    };
+    using P  = fs::perms;
+    auto bit = [&](fs::perms mask, char ch) -> char { return (p & mask) != P::none ? ch : '-'; };
     char s[10];
-    s[0] = bit(P::owner_read,   'r');
-    s[1] = bit(P::owner_write,  'w');
-    s[2] = bit(P::owner_exec,   'x');
-    s[3] = bit(P::group_read,   'r');
-    s[4] = bit(P::group_write,  'w');
-    s[5] = bit(P::group_exec,   'x');
-    s[6] = bit(P::others_read,  'r');
+    s[0] = bit(P::owner_read, 'r');
+    s[1] = bit(P::owner_write, 'w');
+    s[2] = bit(P::owner_exec, 'x');
+    s[3] = bit(P::group_read, 'r');
+    s[4] = bit(P::group_write, 'w');
+    s[5] = bit(P::group_exec, 'x');
+    s[6] = bit(P::others_read, 'r');
     s[7] = bit(P::others_write, 'w');
-    s[8] = bit(P::others_exec,  'x');
+    s[8] = bit(P::others_exec, 'x');
     s[9] = '\0';
     return s;
 }
 
-std::vector<std::string>
-FilesystemAdapter::EntryToRow(const FilesystemEntry& e)
+std::vector<std::string> FilesystemAdapter::EntryToRow(const FilesystemEntry& e)
 {
     return {
-        e.name,         // [0] name
-        e.kind,         // [1] kind
-        e.sizeStr,      // [2] size
-        e.modified,     // [3] modified
-        e.permissions,  // [4] permissions
-        e.path,         // [5] path  ← wire to double-click in SetOnRowDblClick()
+        e.name,
+        e.kind,
+        e.sizeStr,
+        e.modified,
+        e.permissions,
+        e.path,
     };
 }
-
-// ============================================================
-//  Platform-specific home / root paths
-// ============================================================
 
 fs::path FilesystemAdapter::HomeDir()
 {
@@ -587,16 +568,18 @@ fs::path FilesystemAdapter::HomeDir()
     const char* home = std::getenv("USERPROFILE");
     if (home) {
         std::error_code ec;
-        const fs::path p(home);
-        if (fs::is_directory(p, ec)) return p;
+        const fs::path  p(home);
+        if (fs::is_directory(p, ec))
+            return p;
     }
     // Fallback: HOMEDRIVE + HOMEPATH (legacy / some server environments)
     const char* drive = std::getenv("HOMEDRIVE");
     const char* hpath = std::getenv("HOMEPATH");
     if (drive && hpath) {
         std::error_code ec;
-        const fs::path p(std::string(drive) + hpath);
-        if (fs::is_directory(p, ec)) return p;
+        const fs::path  p(std::string(drive) + hpath);
+        if (fs::is_directory(p, ec))
+            return p;
     }
     return fs::path("C:\\");
 #else
@@ -604,14 +587,12 @@ fs::path FilesystemAdapter::HomeDir()
     const char* home = std::getenv("HOME");
     if (home && home[0] != '\0') {
         std::error_code ec;
-        const fs::path p(home);
-        if (fs::is_directory(p, ec)) return p;
+        const fs::path  p(home);
+        if (fs::is_directory(p, ec))
+            return p;
     }
-    // Fall back to the passwd database.
-    const struct passwd* pw = ::getpwuid(::getuid());
-    if (pw && pw->pw_dir && pw->pw_dir[0] != '\0')
-        return fs::path(pw->pw_dir);
-    return fs::path("/");
+    // currentPath?
+    return  fs::current_path();
 #endif
 }
 
@@ -624,7 +605,7 @@ fs::path FilesystemAdapter::RootDir()
         return fs::path(buf).root_path();
     return fs::path("C:\\");
 #else
-    return fs::path("/");
+    return fs::path{"/"};
 #endif
 }
 
