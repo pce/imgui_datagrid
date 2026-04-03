@@ -1,7 +1,6 @@
 #pragma once
 #include "../data_source.hpp"
 
-#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -9,6 +8,13 @@
 namespace fs = std::filesystem;
 
 namespace Adapters {
+
+enum class FsCapability {
+    PosixPermissions,
+    WindowsAttributes
+};
+
+
 
 struct FilesystemEntry
 {
@@ -106,6 +112,8 @@ class FilesystemAdapter final : public IDataSource
 
     [[nodiscard]] static fs::path HomeDir();
     [[nodiscard]] static fs::path RootDir();
+
+    [[nodiscard]] bool HasCapability(FsCapability capability) const;
 
     fs::path                 currentPath_;
     std::vector<std::string> bookmarks_;

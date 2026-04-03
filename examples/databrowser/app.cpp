@@ -138,8 +138,8 @@ void App::Init()
     theme_.RegisterFonts(ThemeType::EarthSUSE,          fSUSEui,     fSUSEMono);
     theme_.RegisterFonts(ThemeType::EarthSUSEDark,      fSUSEui,     fSUSEMono);
     theme_.RegisterFonts(ThemeType::NeonSpaces,         fRoboto,     fMonaKrypton);
-    theme_.RegisterFonts(ThemeType::DawnBringer16Dark,  fHackUi,     fHackCode);
-    theme_.RegisterFonts(ThemeType::DawnBringer16Light, fHackUi,     fHackCode);
+    theme_.RegisterFonts(ThemeType::DawnBringer16Dark,  fMonaKrypton,     fHackCode);
+    theme_.RegisterFonts(ThemeType::DawnBringer16Light, fMonaKrypton,     fHackCode);
     theme_.RegisterFonts(ThemeType::Material,           fRoboto,     fHackCode);
     theme_.RegisterFonts(ThemeType::MaterialDark,       fRoboto,     fHackCode);
     theme_.RegisterFonts(ThemeType::MonoLight,          fJetBrains,  fJetBrains);

@@ -1,6 +1,5 @@
 #include "theme.hpp"
 
-// ─── ApplyImGuiStyle ─────────────────────────────────────────────────────────
 // Stores DPI and re-applies per-theme spacing/rounding for the current theme.
 void Theme::ApplyImGuiStyle(float dpiScale)
 {
@@ -8,7 +7,6 @@ void Theme::ApplyImGuiStyle(float dpiScale)
     ApplyThemeStyle_(current_);
 }
 
-// ─── ApplyThemeStyle_ ────────────────────────────────────────────────────────
 // Per-theme spacing, rounding, and border sizes.
 //
 // Groups and their rationale:
@@ -19,7 +17,7 @@ void Theme::ApplyImGuiStyle(float dpiScale)
 //   Neon     (NeonSpaces)                  — 2 px, sharp scanline
 //   Retro    (DawnBringer* ×4)             — 0 px, crisp pixel-art
 //   Mono     (MonoLight, MonoDark)         — 2 px, dense programmer layout
-void Theme::ApplyThemeStyle_(ThemeType t)
+void Theme::ApplyThemeStyle_(ThemeType t) const
 {
     const float s  = dpiScale_;
     ImGuiStyle& st = ImGui::GetStyle();

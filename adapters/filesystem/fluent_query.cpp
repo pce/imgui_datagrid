@@ -1,12 +1,11 @@
 #include "fluent_query.hpp"
+#include "../platform_detect.hpp"
 
 #include <algorithm>
-#include <cctype>
 #include <chrono>
-#include <cstring>
+#include <ctime>
 #include <format>
 #include <ranges>
-#include <sstream>
 #include <string>
 
 namespace Adapters::Fs {
@@ -32,18 +31,15 @@ std::string FmtTime(const fs::file_time_type& t)
 {
     if (t == fs::file_time_type{})
         return "—";
-    const auto sysTp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-        t - fs::file_time_type::clock::now() + std::chrono::system_clock::now());
-    const std::time_t tt = std::chrono::system_clock::to_time_t(sysTp);
-    std::tm           tmBuf{};
-#ifdef _WIN32
-    localtime_s(&tmBuf, &tt);
-#else
-    localtime_r(&tt, &tmBuf);
-#endif
-    char buf[20];
-    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tmBuf);
-    return buf;
+    using namespace std::chrono;
+    const auto sysTp = time_point_cast<system_clock::duration>(file_clock::to_sys(t));
+    const std::time_t tt = system_clock::to_time_t(sysTp);
+    std::tm tmBuf{};
+    if (!Platform::localtime_safe(&tt, &tmBuf))
+        return "?";
+    return std::format("{:04}-{:02}-{:02} {:02}:{:02}",
+        tmBuf.tm_year + 1900, tmBuf.tm_mon + 1, tmBuf.tm_mday,
+        tmBuf.tm_hour, tmBuf.tm_min);
 }
 
 std::string FmtPerms(fs::perms p)
@@ -70,16 +66,28 @@ FilesystemEntry MakeEntry(const fs::directory_entry& de, bool followSymlinks)
 
     const bool isSym  = de.is_symlink(ec);
     fs::path   target = de.path();
+    ec.clear();
+
     if (isSym && followSymlinks) {
         const auto canon = fs::canonical(de.path(), ec);
         if (!ec)
             target = canon;
+        ec.clear();
     }
 
     e.name = de.path().filename().string();
     e.path = de.path().string();
 
-    const auto status = followSymlinks ? fs::status(target, ec) : de.symlink_status(ec);
+    // status follows symlinks; symlink_status reports the link itself.
+    // On Windows the distinction is moot — always use status.
+    const auto status = [&]() {
+        if constexpr (Platform::isWindows)
+            return fs::status(target, ec);
+        else
+            return followSymlinks ? fs::status(target, ec)
+                                  : fs::symlink_status(de.path(), ec);
+    }();
+
     if (!ec) {
         if (fs::is_directory(status))
             e.kind = "dir";
@@ -92,21 +100,24 @@ FilesystemEntry MakeEntry(const fs::directory_entry& de, bool followSymlinks)
     } else {
         e.kind = isSym ? "symlink" : "other";
     }
+    ec.clear();
 
     const bool isDir = (e.kind == "dir");
 
     if (!isDir && fs::is_regular_file(status)) {
-        e.sizeBytes = fs::file_size(de.path(), ec);
+        e.sizeBytes = fs::file_size(target, ec);
         if (ec)
             e.sizeBytes = 0;
+        ec.clear();
     }
     e.sizeStr = FmtSize(e.sizeBytes, isDir);
 
-    e.modTime = fs::last_write_time(de.path(), ec);
+    e.modTime = fs::last_write_time(target, ec);
     if (!ec)
         e.modified = FmtTime(e.modTime);
+    ec.clear();
 
-    if (!ec && status.permissions() != fs::perms::unknown)
+    if (status.permissions() != fs::perms::unknown)
         e.permissions = FmtPerms(status.permissions());
 
     return e;
@@ -120,12 +131,12 @@ std::vector<std::string> EntryToRow(const FilesystemEntry& e)
 std::vector<ColumnInfo> StandardColumns()
 {
     return {
-        {"name", "TEXT", false, false},
-        {"kind", "TEXT", false, false},
-        {"size", "TEXT", true, false},
-        {"modified", "TEXT", true, false},
-        {"permissions", "TEXT", true, false},
-        {"path", "TEXT", false, false},
+        {"name",       "TEXT", false, false},
+        {"kind",       "TEXT", false, false},
+        {"size",       "TEXT", true,  false},
+        {"modified",   "TEXT", true,  false},
+        {std::string{Platform::kPermColName}, "TEXT", true, false},
+        {"path",       "TEXT", false, false},
     };
 }
 
@@ -382,26 +393,28 @@ std::vector<FilesystemEntry> FluentQuery::entries() const
     }
 
     if (hasSqlPlan_ && sqlPlan_.hasPred) {
-        // SQL path: build a Structure-of-Arrays and apply a bitmask filter.
-        // Columns: name(0) kind(1) size-num(2) modified(3) permissions(4)
+        // Columns: name(0) kind(1) size-num(2) modified(3) perms(4)
         //          path(5) extension(6) ext(7=alias) modtime-num(8)
         const size_t n = all.size();
 
         Query::TabularSoA soa;
         soa.rowCount = n;
-        soa.colNames = {"name", "kind", "size", "modified", "permissions", "path", "extension", "ext", "modtime"};
+        soa.colNames = {"name", "kind", "size", "modified",
+                        std::string{Platform::kPermColName},
+                        "path", "extension", "ext", "modtime"};
         soa.colTypes = {
             Query::ColType::Text,    // name
             Query::ColType::Text,    // kind
             Query::ColType::Numeric, // size
             Query::ColType::Text,    // modified
-            Query::ColType::Text,    // permissions
+            Query::ColType::Text,    // permissions / attributes
             Query::ColType::Text,    // path
             Query::ColType::Text,    // extension
             Query::ColType::Text,    // ext (alias)
             Query::ColType::Numeric, // modtime (raw int64 for range queries)
         };
-        const size_t ncols = soa.colNames.size();
+        const size_t ncols    = soa.colNames.size();
+        const size_t permCol  = soa.col_index(Platform::kPermColName);
         soa.strCols.resize(ncols);
         soa.numCols.resize(ncols);
         for (auto& v : soa.strCols)
@@ -415,7 +428,7 @@ std::vector<FilesystemEntry> FluentQuery::entries() const
             soa.strCols[1].push_back(e.kind);
             soa.strCols[2].push_back(e.sizeStr);
             soa.strCols[3].push_back(e.modified);
-            soa.strCols[4].push_back(e.permissions);
+            soa.strCols[permCol].push_back(e.permissions);
             soa.strCols[5].push_back(e.path);
             soa.strCols[6].push_back(ext);
             soa.strCols[7].push_back(ext); // ext alias
@@ -434,7 +447,7 @@ std::vector<FilesystemEntry> FluentQuery::entries() const
         all = std::move(filtered);
 
     } else if (!predicates_.empty()) {
-        // Fluent-API path: row-by-row EntryPred evaluation (unchanged).
+        // Fluent-API path: row-by-row EntryPred evaluation.
         auto combined = [&](const FilesystemEntry& e) {
             return std::ranges::all_of(predicates_, [&](const EntryPred& p) { return p(e); });
         };

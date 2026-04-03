@@ -2,37 +2,17 @@
 #include <cstdlib>
 #include <string>
 
+#include "../../../adapters/platform_detect.hpp"
 
 namespace UI::Platform {
 
-inline constexpr bool isMacOS =
-#if defined(__APPLE__)
-    true;
-#else
-    false;
-#endif
-
-inline constexpr bool isWindows =
-#if defined(_WIN32)
-    true;
-#else
-    false;
-#endif
-
-inline constexpr bool isLinux =
-#if defined(__linux__)
-    true;
-#else
-    false;
-#endif
+// Re-export from the shared detection header so UI code uses UI::Platform::* names.
+inline constexpr bool isMacOS   = ::Platform::isMacOS;
+inline constexpr bool isWindows = ::Platform::isWindows;
+inline constexpr bool isLinux   = ::Platform::isLinux;
 
 /// Primary modifier key name for display in menu shortcuts.
-inline constexpr const char* kModName =
-#if defined(__APPLE__)
-    "Cmd";
-#else
-    "Ctrl";
-#endif
+inline constexpr const char* kModName = isMacOS ? "Cmd" : "Ctrl";
 
 /// Single-click navigates on macOS (Finder convention);
 /// double-click navigates on Windows/Linux (Explorer convention).

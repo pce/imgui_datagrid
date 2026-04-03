@@ -1,5 +1,5 @@
 #pragma once
-// MIT License — see docs/README.md for usage and quick-start guide.
+// MIT License
 
 #include "imgui.h"
 #include <functional>
@@ -12,6 +12,7 @@
 #endif
 
 namespace ImGuiExt {
+
 
 /// Controls default cell alignment and sort/tooltip behaviour.
 enum class ColumnType
@@ -185,7 +186,7 @@ struct DataGridState
     bool selectAllRows = false;
 
     /// O(1) test — true when cell (r, c) is inside the current selection rectangle.
-    [[nodiscard]] bool IsCellSelected(int r, int c) const noexcept
+    [[nodiscard]] bool IsCellSelected(const int r, int c) const noexcept
     {
         if (selectAllRows) return true;
         if (anchorRow < 0) return false;

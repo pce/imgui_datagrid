@@ -1,5 +1,6 @@
 #include "filesystem_adapter.hpp"
 #include "../adapter_registry.hpp"
+#include "../platform_detect.hpp"
 #include "fluent_query.hpp"
 
 #include <algorithm>
@@ -8,16 +9,10 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <format>
 #include <sstream>
 #include <system_error>
 
-#if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#else
-#include <pwd.h>
-#include <unistd.h>
-#endif
 
 namespace {
 const Adapters::RegisterAdapter<Adapters::FilesystemAdapter> kFilesystemReg{"filesystem"};
@@ -133,17 +128,27 @@ std::vector<TableInfo> FilesystemAdapter::GetTables(const std::string& catalog) 
     return tables;
 }
 
+
+bool FilesystemAdapter::HasCapability(FsCapability capability) const {
+    if constexpr (Platform::isWindows)
+        return capability == FsCapability::WindowsAttributes;
+    else
+        return capability == FsCapability::PosixPermissions;
+}
+
 std::vector<ColumnInfo> FilesystemAdapter::GetColumns(const std::string& /*table*/) const
 {
-    return {
-        {"name", "TEXT", false, false},
-        {"kind", "TEXT", false, false},
-        {"size", "TEXT", true, false},
-        {"modified", "TEXT", true, false},
-        {"permissions", "TEXT", true, false},
-        {"path", "TEXT", false, false},
+    std::vector<ColumnInfo> cols = {
+        {"name",     "TEXT", false, false},
+        {"kind",     "TEXT", false, false},
+        {"size",     "TEXT", true,  false},
+        {"modified", "TEXT", true,  false},
+        {"path",     "TEXT", false, false},
     };
+    cols.push_back({std::string{Platform::kPermColName}, "TEXT", true, false});
+    return cols;
 }
+
 
 std::vector<FilesystemEntry> FilesystemAdapter::EnumerateDir(const fs::path& dir) const
 {
@@ -219,7 +224,15 @@ std::vector<FilesystemEntry> FilesystemAdapter::EnumerateDir(const fs::path& dir
         }
 
         const auto status = followSymlinks_ ? fs::status(de.path(), entryEc) : fs::symlink_status(de.path(), entryEc);
-        e.permissions     = entryEc ? "?????????" : FormatPerms(status.permissions());
+
+        // Windows exposes simplified ACL semantics; POSIX has full rwx permissions.
+        if constexpr (Platform::isWindows) {
+            const auto p  = status.permissions();
+            e.permissions = (p & fs::perms::owner_write) == fs::perms::none ? "r--" : "rw-";
+        } else {
+            e.permissions = entryEc ? "?????????" : FormatPerms(status.permissions());
+        }
+
         entryEc.clear();
 
         entries.push_back(std::move(e));
@@ -505,30 +518,15 @@ std::string FilesystemAdapter::FormatSize(std::uintmax_t bytes, bool isDir)
 
 std::string FilesystemAdapter::FormatTime(const fs::file_time_type& t)
 {
-    // C++17 does not provide file_clock::to_sys().  The portable trick is to
-    // compute the offset between file_clock::now() and system_clock::now()
-    // and apply it to the supplied time point.
     using namespace std::chrono;
-
-    const auto        delta = t - fs::file_time_type::clock::now();
-    const auto        sysTp = system_clock::now() + duration_cast<system_clock::duration>(delta);
-    const std::time_t tt    = system_clock::to_time_t(sysTp);
-
-#if defined(_WIN32)
+    const auto sysTp = time_point_cast<system_clock::duration>(file_clock::to_sys(t));
+    const std::time_t tt = system_clock::to_time_t(sysTp);
     std::tm tmBuf{};
-    if (localtime_s(&tmBuf, &tt) != 0)
+    if (!Platform::localtime_safe(&tt, &tmBuf))
         return "?";
-    std::tm* tp = &tmBuf;
-#else
-    std::tm  tmBuf{};
-    std::tm* tp = ::localtime_r(&tt, &tmBuf);
-    if (!tp)
-        return "?";
-#endif
-
-    char buf[20];
-    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", tp);
-    return buf;
+    return std::format("{:04}-{:02}-{:02} {:02}:{:02}",
+        tmBuf.tm_year + 1900, tmBuf.tm_mon + 1, tmBuf.tm_mday,
+        tmBuf.tm_hour, tmBuf.tm_min);
 }
 
 std::string FilesystemAdapter::FormatPerms(fs::perms p)
@@ -563,50 +561,47 @@ std::vector<std::string> FilesystemAdapter::EntryToRow(const FilesystemEntry& e)
 
 fs::path FilesystemAdapter::HomeDir()
 {
-#if defined(_WIN32)
-    // USERPROFILE is set by Windows for every user session.
-    const char* home = std::getenv("USERPROFILE");
-    if (home) {
-        std::error_code ec;
-        const fs::path  p(home);
-        if (fs::is_directory(p, ec))
-            return p;
+    if constexpr (Platform::isWindows) {
+        // USERPROFILE is set by Windows for every user session.
+        const char* home = std::getenv("USERPROFILE");
+        if (home) {
+            std::error_code ec;
+            const fs::path  p(home);
+            if (fs::is_directory(p, ec))
+                return p;
+        }
+        // Fallback: HOMEDRIVE + HOMEPATH (legacy / some server environments)
+        const char* drive = std::getenv("HOMEDRIVE");
+        const char* hpath = std::getenv("HOMEPATH");
+        if (drive && hpath) {
+            std::error_code ec;
+            const fs::path  p(std::string(drive) + hpath);
+            if (fs::is_directory(p, ec))
+                return p;
+        }
+        return fs::path("C:\\");
+    } else {
+        // Prefer $HOME so that sudo / su overrides are respected.
+        const char* home = std::getenv("HOME");
+        if (home && home[0] != '\0') {
+            std::error_code ec;
+            const fs::path  p(home);
+            if (fs::is_directory(p, ec))
+                return p;
+        }
+        return fs::current_path();
     }
-    // Fallback: HOMEDRIVE + HOMEPATH (legacy / some server environments)
-    const char* drive = std::getenv("HOMEDRIVE");
-    const char* hpath = std::getenv("HOMEPATH");
-    if (drive && hpath) {
-        std::error_code ec;
-        const fs::path  p(std::string(drive) + hpath);
-        if (fs::is_directory(p, ec))
-            return p;
-    }
-    return fs::path("C:\\");
-#else
-    // Prefer $HOME so that sudo / su overrides are respected.
-    const char* home = std::getenv("HOME");
-    if (home && home[0] != '\0') {
-        std::error_code ec;
-        const fs::path  p(home);
-        if (fs::is_directory(p, ec))
-            return p;
-    }
-    // currentPath?
-    return  fs::current_path();
-#endif
 }
 
 fs::path FilesystemAdapter::RootDir()
 {
-#if defined(_WIN32)
-    // Return the root of the drive that contains the current directory.
-    char buf[MAX_PATH];
-    if (GetCurrentDirectoryA(MAX_PATH, buf))
-        return fs::path(buf).root_path();
-    return fs::path("C:\\");
-#else
-    return fs::path{"/"};
-#endif
+    if constexpr (Platform::isWindows) {
+        std::error_code ec;
+        const auto root = fs::current_path(ec).root_path();
+        return ec ? fs::path("C:\\") : root;
+    } else {
+        return fs::path{"/"};
+    }
 }
 
 } // namespace Adapters

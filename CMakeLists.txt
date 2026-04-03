@@ -31,7 +31,6 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND APPLE)
         )
     endif()
 endif()
-# ─────────────────────────────────────────────────────────────────────────────
 
 include(FetchContent)
 
@@ -236,8 +235,15 @@ else()
     message(STATUS "[local] SQLiteCpp")
 endif()
 
-
-
+# hanickadot/polyfill-23 — header-only C++23 polyfills (move_only_function, etc.)
+# Provides hana23::move_only_function when __cpp_lib_move_only_function is absent.
+FetchContent_Declare(
+    hana_polyfill23
+    GIT_REPOSITORY https://github.com/hanickadot/polyfill-23.git
+    GIT_TAG        main
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(hana_polyfill23)
 
 find_package(nlohmann_json QUIET)
 if (NOT nlohmann_json_FOUND)
@@ -375,7 +381,11 @@ add_library(datagrid_adapters STATIC    adapters/adapter_registry.cpp
     adapters/query/tabular_query.cpp
     adapters/utils/type_inferrer.cpp
 )
-target_include_directories(datagrid_adapters PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(datagrid_adapters PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${hana_polyfill23_SOURCE_DIR}/include
+)
+target_compile_definitions(datagrid_adapters PUBLIC COMPAT_HAS_HANA_POLYFILL23)
 target_compile_features(datagrid_adapters PUBLIC cxx_std_23)
 target_link_libraries(datagrid_adapters PUBLIC SQLiteCpp)
 if (TARGET datagrid_asan)
@@ -406,8 +416,14 @@ if (DATAGRID_HAVE_PGSQL)
 endif()
 
 add_library(imgui_datagrid_lib STATIC imgui_datagrid.cpp)
-target_include_directories(imgui_datagrid_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_compile_definitions(imgui_datagrid_lib PUBLIC IMGUI_DATAGRID_USE_JSON)
+target_include_directories(imgui_datagrid_lib PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${hana_polyfill23_SOURCE_DIR}/include
+)
+target_compile_definitions(imgui_datagrid_lib PUBLIC
+    IMGUI_DATAGRID_USE_JSON
+    COMPAT_HAS_HANA_POLYFILL23
+)
 target_compile_features(imgui_datagrid_lib PUBLIC cxx_std_23)
 target_link_libraries(imgui_datagrid_lib PUBLIC imgui nlohmann_json::nlohmann_json)
 if (TARGET datagrid_asan)

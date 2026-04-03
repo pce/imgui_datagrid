@@ -1,11 +1,15 @@
 #include "imgui_datagrid.hpp"
+#include "compat/move_only_function.hpp"
 
-#include <algorithm>
+#include <functional>
 #include <cstdio>
 #include <format>
 #include <fstream>
 
 namespace ImGuiExt {
+
+// Deferred callbacks fired after EndTable()
+using DeferredFn = compat::move_only_function<void() noexcept>;
 
 static void DrawCellDefault(const ColumnDef& col, const std::string& value)
 {
@@ -64,10 +68,7 @@ bool DataGrid(std::vector<ColumnDef>&                      columns,
 
     bool changed = false;
 
-    // Defer callbacks that may mutate `rows` until after we finish
-    // iterating and after ImGui::EndTable().  Callbacks receive a copy
-    // of the row data to avoid referencing invalidated memory.
-    std::vector<std::function<void()>> deferred;
+    std::vector<DeferredFn> deferred;
 
     if (!ImGui::BeginTable(options.id, visibleCount, flags, ImVec2(0.0f, height)))
         return false;
@@ -93,7 +94,7 @@ bool DataGrid(std::vector<ColumnDef>&                      columns,
 
     if (ImGuiTableSortSpecs* specs = ImGui::TableGetSortSpecs()) {
         if (specs->SpecsDirty && specs->SpecsCount > 0) {
-            const int targetVisIdx = (int)specs->Specs[0].ColumnIndex;
+            const int targetVisIdx = specs->Specs[0].ColumnIndex;
             int       visIdx       = 0;
             for (const auto& col : columns) {
                 if (!col.visible)
@@ -122,8 +123,8 @@ bool DataGrid(std::vector<ColumnDef>&                      columns,
             ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows)) {
             state.anchorRow     = 0;
             state.anchorCol     = 0;
-            state.extentRow     = (int)rows.size() - 1;
-            state.extentCol     = (int)columns.size() - 1;
+            state.extentRow     = static_cast<int>(rows.size() - 1);
+            state.extentCol     = static_cast<int>(columns.size() - 1);
             state.selectAllRows = true;
             state.selectionChanged = true;
             changed                = true;
@@ -138,7 +139,7 @@ bool DataGrid(std::vector<ColumnDef>&                      columns,
     {
         ImGui::TableNextRow(ImGuiTableRowFlags_Headers);
         int vh = 0;
-        for (int ci = 0; ci < (int)columns.size(); ++ci) {
+        for (int ci = 0; ci < static_cast<int>(columns.size()); ++ci) {
             if (!columns[ci].visible) continue;
             ImGui::TableSetColumnIndex(vh++);
             ImGui::TableHeader(columns[ci].label.c_str());
@@ -159,7 +160,7 @@ bool DataGrid(std::vector<ColumnDef>&                      columns,
     }
 
     ImGuiListClipper clipper;
-    clipper.Begin((int)rows.size());
+    clipper.Begin(static_cast<int>(rows.size()));
 
     while (clipper.Step()) {
         for (int rowIdx = clipper.DisplayStart; rowIdx < clipper.DisplayEnd; ++rowIdx) {
@@ -179,7 +180,7 @@ bool DataGrid(std::vector<ColumnDef>&                      columns,
                 ImGui::TableSetColumnIndex(visColIdx++);
 
                 // Cell selection highlight (drawn before content).
-                if (state.IsCellSelected(rowIdx, (int)c))
+                if (state.IsCellSelected(rowIdx, static_cast<int>(c)))
                     ImGui::TableSetBgColor(ImGuiTableBgTarget_CellBg,
                                           ImGui::GetColorU32(ImGuiCol_TextSelectedBg));
 
@@ -199,7 +200,7 @@ bool DataGrid(std::vector<ColumnDef>&                      columns,
                                 state.selectionChanged = true;
                                 changed                = true;
                                 if (options.onRowClick) {
-                                    deferred.push_back([cb = options.onRowClick, rowIdx]() { cb(rowIdx); });
+                                    deferred.emplace_back([cb = options.onRowClick, rowIdx]() noexcept { cb(rowIdx); });
                                 }
                             }
                         }
@@ -207,7 +208,7 @@ bool DataGrid(std::vector<ColumnDef>&                      columns,
                         if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
                             state.editingRow == -1) {
                             if (options.onRowDblClick) {
-                                deferred.push_back([cb = options.onRowDblClick, rowIdx]() { cb(rowIdx); });
+                                deferred.emplace_back([cb = options.onRowDblClick, rowIdx]() noexcept { cb(rowIdx); });
                             }
                         }
 
@@ -237,7 +238,7 @@ bool DataGrid(std::vector<ColumnDef>&                      columns,
 
                 const std::string& cellVal = (c < row.size()) ? row[c] : "";
 
-                if (isEditingRow && state.editingCol == (int)c) {
+                if (isEditingRow && state.editingCol == static_cast<int>(c)) {
                     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
                     if (!state.editFocusDone) {
                         ImGui::SetKeyboardFocusHere();
@@ -250,7 +251,7 @@ bool DataGrid(std::vector<ColumnDef>&                      columns,
                                          ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
                     if (committed || ImGui::IsItemDeactivatedAfterEdit()) {
                         if (options.onCellEdit)
-                            options.onCellEdit(rowIdx, (int)c, state.editBuf);
+                            options.onCellEdit(rowIdx, static_cast<int>(c), state.editBuf);
                         state.editingRow    = -1;
                         state.editingCol    = -1;
                         state.editFocusDone = false;
@@ -286,7 +287,7 @@ bool DataGrid(std::vector<ColumnDef>&                      columns,
                     if (col.editable && options.onCellEdit && state.editingRow == -1 && ImGui::IsItemHovered() &&
                         ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                         state.editingRow    = rowIdx;
-                        state.editingCol    = (int)c;
+                        state.editingCol    = static_cast<int>(c);
                         state.editFocusDone = false;
                         std::snprintf(state.editBuf, sizeof(state.editBuf), "%s", cellVal.c_str());
                     }
@@ -297,12 +298,12 @@ bool DataGrid(std::vector<ColumnDef>&                      columns,
                         const bool shift = ImGui::GetIO().KeyShift;
                         if (!shift || state.anchorRow < 0 || state.anchorCol < 0) {
                             state.anchorRow = rowIdx;
-                            state.anchorCol = (int)c;
+                            state.anchorCol = static_cast<int>(c);
                             state.extentRow = rowIdx;
-                            state.extentCol = (int)c;
+                            state.extentCol = static_cast<int>(c);
                         } else {
                             state.extentRow = rowIdx;
-                            state.extentCol = (int)c;
+                            state.extentCol = static_cast<int>(c);
                         }
                         state.selectAllRows    = false;
                         state.selectionChanged = true;
@@ -324,11 +325,7 @@ bool DataGrid(std::vector<ColumnDef>&                      columns,
     ImGui::EndTable();
 
     for (auto& fn : deferred) {
-        try {
-            fn();
-        } catch (...) {
-            // Swallow exceptions — UI code shouldn't throw; avoid crashing the app.
-        }
+        fn();
     }
 
     return changed;
@@ -422,13 +419,13 @@ void DataGridLoadLayout(std::vector<ColumnDef>& columns, DataGridState& state, c
 
     if (!j.contains("columns"))
         return;
-    for (const auto& jcol : j["columns"]) {
-        const std::string key = jcol.value("key", "");
+    for (const auto& basic_json : j["columns"]) {
+        const std::string key = basic_json.value("key", "");
         for (auto& col : columns) {
             if (col.key != key)
                 continue;
-            col.visible   = jcol.value("visible", true);
-            col.initWidth = jcol.value("initWidth", 0.0f);
+            col.visible   = basic_json.value("visible", true);
+            col.initWidth = basic_json.value("initWidth", 0.0f);
             break;
         }
     }

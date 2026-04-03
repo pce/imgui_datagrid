@@ -9,6 +9,8 @@
 #include <string>
 #include <string_view>
 
+#include "platform.hpp"
+
 namespace UI {
 
 struct SniffResult
@@ -130,11 +132,11 @@ inline std::string detect_language(std::span<const std::byte> sample) noexcept
     constexpr std::size_t kMax = 512;
     std::array<std::byte, kMax> buf;
 
-#ifdef _WIN32
-    std::FILE* raw = ::_wfopen(path.c_str(), L"rb");
-#else
-    std::FILE* raw = std::fopen(path.c_str(), "rb");
-#endif
+    std::FILE* raw = nullptr;
+    if constexpr (UI::Platform::isWindows)
+        raw = ::_wfopen(path.c_str(), L"rb");
+    else
+        raw = std::fopen(path.c_str(), "rb");
     if (!raw) return {};
     std::unique_ptr<std::FILE, decltype(&std::fclose)> f(raw, &std::fclose);
 
@@ -170,11 +172,11 @@ inline std::string lower_ext(const std::filesystem::path& p) noexcept {
     if (e == ".db" || e == ".sqlite" || e == ".sqlite3" || e == ".db3") return true;
     // Magic: "SQLite format 3\0"
     char magic[15] = {};
-#ifdef _WIN32
-    std::FILE* f = ::_wfopen(p.c_str(), L"rb");
-#else
-    std::FILE* f = std::fopen(p.c_str(), "rb");
-#endif
+    std::FILE* f = nullptr;
+    if constexpr (UI::Platform::isWindows)
+        f = ::_wfopen(p.c_str(), L"rb");
+    else
+        f = std::fopen(p.c_str(), "rb");
     if (!f) return false;
     const auto n = std::fread(magic, 1, 15, f);
     std::fclose(f);
@@ -185,24 +187,46 @@ inline std::string lower_ext(const std::filesystem::path& p) noexcept {
 {
     if (detail::lower_ext(p) == ".pdf") return true;
     char magic[4] = {};
-#ifdef _WIN32
-    std::FILE* f = ::_wfopen(p.c_str(), L"rb");
-#else
-    std::FILE* f = std::fopen(p.c_str(), "rb");
-#endif
+    std::FILE* f = nullptr;
+    if constexpr (UI::Platform::isWindows)
+        f = ::_wfopen(p.c_str(), L"rb");
+    else
+        f = std::fopen(p.c_str(), "rb");
     if (!f) return false;
     const auto n = std::fread(magic, 1, 4, f);
     std::fclose(f);
     return n == 4 && magic[0]=='%' && magic[1]=='P' && magic[2]=='D' && magic[3]=='F';
 }
 
-/// True when the owner-execute bit is set (Unix/macOS) — indicates a launchable binary or script.
+/// True when the path represents something the OS should launch.
+///
+/// Platform semantics:
+///   macOS   — regular file with owner-exec bit set, OR a ".app" bundle directory.
+///   Windows — executable by extension (.exe / .com / .bat / .cmd / .ps1 / .msi).
+///   Linux   — regular file with owner-exec bit set.
 [[nodiscard]] inline bool IsExecutableFile(const std::filesystem::path& p) noexcept
 {
+    namespace fs = std::filesystem;
     std::error_code ec;
-    const auto perms = std::filesystem::status(p, ec).permissions();
-    if (ec) return false;
-    return (perms & std::filesystem::perms::owner_exec) != std::filesystem::perms::none;
+
+    if constexpr (UI::Platform::isWindows) {
+        const std::string ext = detail::lower_ext(p);
+        for (auto sv : {".exe", ".com", ".bat", ".cmd", ".ps1", ".msi"})
+            if (ext == sv) return true;
+        return false;
+    } else {
+        if constexpr (UI::Platform::isMacOS) {
+            // .app bundles are launchable directory packages on macOS.
+            if (p.extension() == ".app") {
+                const auto st = fs::status(p, ec);
+                return !ec && fs::is_directory(st);
+            }
+        }
+        // POSIX: exec bit on a regular file only — avoids false-positives on directories.
+        const auto st = fs::status(p, ec);
+        if (ec || !fs::is_regular_file(st)) return false;
+        return (st.permissions() & fs::perms::owner_exec) != fs::perms::none;
+    }
 }
 
 /// True when the extension belongs to a well-known text/source-code format.

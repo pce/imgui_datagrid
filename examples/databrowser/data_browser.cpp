@@ -830,7 +830,6 @@ void DataBrowser::DrawMainContent()
             const std::string fkind = (kindCol >= 0 && kindCol < (int)row.size()) ? row[kindCol] : "";
 
             if (!fpath.empty()) {
-                // ── Open actions ──────────────────────────────────────────
                 const std::string openLbl =
                     std::string(Icons::ExternalLink) + "  Open\xe2\x80\xa6";
                 if (ImGui::MenuItem(openLbl.c_str())) {

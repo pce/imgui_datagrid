@@ -157,76 +157,76 @@ class FluentQuery
 } // namespace Adapters::Fs
 
 namespace Adapters::FsLinq {
-using FsQuery   = Adapters::Fs::FluentQuery;
-using EntryPred = Adapters::Fs::EntryPred;
+using FsQuery   = Fs::FluentQuery;
+using EntryPred = Fs::EntryPred;
 // Factories:
 inline auto kind_is(std::string_view k)
 {
-    return Adapters::Fs::kind_is(k);
+    return Fs::kind_is(k);
 }
 inline auto is_file()
 {
-    return Adapters::Fs::is_file();
+    return Fs::is_file();
 }
 inline auto is_dir()
 {
-    return Adapters::Fs::is_dir();
+    return Fs::is_dir();
 }
 inline auto is_symlink()
 {
-    return Adapters::Fs::is_symlink();
+    return Fs::is_symlink();
 }
 inline auto ext_is(std::string_view e)
 {
-    return Adapters::Fs::ext_is(e);
+    return Fs::ext_is(e);
 }
 inline auto ext_in(std::vector<std::string> v)
 {
-    return Adapters::Fs::ext_in(std::move(v));
+    return Fs::ext_in(std::move(v));
 }
 inline auto name_eq(std::string_view n)
 {
-    return Adapters::Fs::name_eq(n);
+    return Fs::name_eq(n);
 }
 inline auto name_contains(std::string_view s)
 {
-    return Adapters::Fs::name_contains(s);
+    return Fs::name_contains(s);
 }
 inline auto name_like(std::string_view p)
 {
-    return Adapters::Fs::name_like(p);
+    return Fs::name_like(p);
 }
 inline auto name_ilike(std::string_view p)
 {
-    return Adapters::Fs::name_ilike(p);
+    return Fs::name_ilike(p);
 }
 inline auto name_glob(std::string_view p)
 {
-    return Adapters::Fs::name_glob(p);
+    return Fs::name_glob(p);
 }
 inline auto size_eq(std::uintmax_t n)
 {
-    return Adapters::Fs::size_eq(n);
+    return Fs::size_eq(n);
 }
 inline auto size_gt(std::uintmax_t n)
 {
-    return Adapters::Fs::size_gt(n);
+    return Fs::size_gt(n);
 }
 inline auto size_lt(std::uintmax_t n)
 {
-    return Adapters::Fs::size_lt(n);
+    return Fs::size_lt(n);
 }
 inline auto size_ge(std::uintmax_t n)
 {
-    return Adapters::Fs::size_ge(n);
+    return Fs::size_ge(n);
 }
 inline auto size_le(std::uintmax_t n)
 {
-    return Adapters::Fs::size_le(n);
+    return Fs::size_le(n);
 }
 inline auto size_between(std::uintmax_t lo, std::uintmax_t hi)
 {
-    return Adapters::Fs::size_between(lo, hi);
+    return Fs::size_between(lo, hi);
 }
 using namespace Adapters::Fs::literals; // re-export _KB, _MB etc.
 } // namespace Adapters::FsLinq

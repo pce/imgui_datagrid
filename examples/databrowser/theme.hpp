@@ -43,7 +43,7 @@ class Theme
 
   private:
     /// Per-theme spacing, rounding, border sizes — called by both public methods.
-    void ApplyThemeStyle_(ThemeType t);
+    void ApplyThemeStyle_(ThemeType t) const;
 
     float     dpiScale_ = 1.0f;
     ThemeType current_  = ThemeType::SolarizedDark;
