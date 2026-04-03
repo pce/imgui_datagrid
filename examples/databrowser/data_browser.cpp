@@ -1,6 +1,6 @@
 #include "data_browser.hpp"
 #include "adapters/data_source.hpp"
-#include "icons.hpp"
+#include "ui/icons.hpp"
 #include "imgui_datagrid.hpp"
 #include "ui/filetype_sniffer.hpp"
 
@@ -8,6 +8,8 @@
 #include <cstring>
 #include <format>
 #include <string>
+
+namespace datagrid {
 
 int DataBrowser::nextInstanceId_ = 0;
 
@@ -25,9 +27,14 @@ DataBrowser::DataBrowser(Adapters::DataSourcePtr source_, const std::string& tit
     inspector_.SetInstanceId(instanceId_);
 }
 
-void DataBrowser::SetLayout(const UI::ResponsiveLayout& l)
+void DataBrowser::SetLayout(const ui::ResponsiveLayout& l)
 {
     layout_ = l;
+}
+
+void DataBrowser::SetCodeFont(ImFont* f) noexcept
+{
+    hexView_.SetFont(f);
 }
 
 void DataBrowser::OpenInspector(const std::string& tableName)
@@ -345,7 +352,7 @@ void DataBrowser::Render()
 void DataBrowser::DrawToolbar()
 {
     if (layout_.isPhone()) {
-        if (ImGui::Button(Icons::Bars))
+        if (ImGui::Button(ui::icons::Bars))
             phoneOverlayOpen_ = !phoneOverlayOpen_;
     } else {
         if (ImGui::Button(showSidebar ? "\xe2\x86\x90" : "\xe2\x86\x92")) // ← / →
@@ -361,7 +368,7 @@ void DataBrowser::DrawToolbar()
     ImGui::PopStyleColor();
     ImGui::SameLine();
 
-    if (ImGui::Button(Icons::InfoCircle) && IsConnected() && !query.table.empty())
+    if (ImGui::Button(ui::icons::InfoCircle) && IsConnected() && !query.table.empty())
         OpenInspector();
     ImGui::SameLine();
 
@@ -370,7 +377,7 @@ void DataBrowser::DrawToolbar()
         ImGui::PushStyleColor(ImGuiCol_Button,
                               editMode_ ? ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive)
                                         : ImGui::GetStyleColorVec4(ImGuiCol_Button));
-        if (ImGui::Button(Icons::Pencil)) {
+        if (ImGui::Button(ui::icons::Pencil)) {
             editMode_ = !editMode_;
             BuildColumns();
         }
@@ -408,7 +415,7 @@ void DataBrowser::DrawToolbar()
 
     if (!editError_.empty()) {
         ImGui::SameLine();
-        ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "  %s %s", Icons::Pencil, editError_.c_str());
+        ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "  %s %s", ui::icons::Pencil, editError_.c_str());
     }
 
     ImGui::TextDisabled("|");
@@ -417,7 +424,7 @@ void DataBrowser::DrawToolbar()
 
     if (!lastError.empty()) {
         ImGui::SameLine();
-        ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "  %s  %s", Icons::Warning, lastError.c_str());
+        ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "  %s  %s", ui::icons::Warning, lastError.c_str());
     } else if (!statusMsg.empty()) {
         ImGui::SameLine();
         ImGui::TextDisabled("  %s", statusMsg.c_str());
@@ -457,7 +464,7 @@ void DataBrowser::DrawSidebarContent()
                 if (ImGui::BeginPopupContextItem(ctxId.c_str())) {
                     ImGui::TextDisabled("%s", tbl.name.c_str());
                     ImGui::Separator();
-                    if (ImGui::MenuItem((std::string(Icons::InfoCircle) + " Inspect\xe2\x80\xa6").c_str()))
+                    if (ImGui::MenuItem((std::string(ui::icons::InfoCircle) + " Inspect\xe2\x80\xa6").c_str()))
                         OpenInspector(tbl.name);
                     ImGui::EndPopup();
                 }
@@ -546,6 +553,7 @@ void DataBrowser::DrawSidebar()
     ImGui::EndChild();
 }
 
+
 void DataBrowser::DrawPhoneOverlay()
 {
     if (!phoneOverlayOpen_)
@@ -560,7 +568,7 @@ void DataBrowser::DrawPhoneOverlay()
                                               ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings;
 
     if (ImGui::Begin("##phone_overlay", &phoneOverlayOpen_, overlayFlags)) {
-        if (ImGui::Button((std::string(Icons::Times) + "  Close").c_str(), ImVec2(-1.0f, 0.0f)))
+        if (ImGui::Button((std::string(ui::icons::Times) + "  Close").c_str(), ImVec2(-1.0f, 0.0f)))
             phoneOverlayOpen_ = false;
         ImGui::Separator();
         DrawSidebarContent();
@@ -698,7 +706,7 @@ void DataBrowser::DrawMainContent()
 
     ImGui::BeginChild(("##dbmain" + idSuffix_).c_str(), ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_NoScrollbar);
 
-    if (UI::DrawSqlEditor(sqlEditor_, source.get())) {
+    if (ui::DrawSqlEditor(sqlEditor_, source.get())) {
         columns.clear();
         for (const auto& ci : sqlEditor_.resultColumns) {
             ImGuiExt::ColumnDef col;
@@ -831,40 +839,40 @@ void DataBrowser::DrawMainContent()
 
             if (!fpath.empty()) {
                 const std::string openLbl =
-                    std::string(Icons::ExternalLink) + "  Open\xe2\x80\xa6";
+                    std::string(ui::icons::ExternalLink) + "  Open\xe2\x80\xa6";
                 if (ImGui::MenuItem(openLbl.c_str())) {
                     if (openCb_) openCb_(fpath, "auto");
                 }
 
                 if (fkind == "file") {
-                    if (UI::IsImageFile(fpath)) {
-                        const std::string lbl = std::string(Icons::Image) + "  Open as Image";
+                    if (ui::IsImageFile(fpath)) {
+                        const std::string lbl = std::string(ui::icons::Image) + "  Open as Image";
                         if (ImGui::MenuItem(lbl.c_str()))
                             if (openCb_) openCb_(fpath, "image");
                     }
 
-                    if (UI::IsTextExtension(fpath)) {
-                        const std::string lbl = std::string(Icons::File) + "  Open as Text";
-                        if (ImGui::MenuItem(lbl.c_str()))
-                            if (openCb_) openCb_(fpath, "text");
-                    }
-
-                    if (UI::IsSqliteFile(fpath)) {
-                        const std::string lbl = std::string(Icons::Database) + "  Open as SQLite";
+                    if (ui::IsSqliteFile(fpath)) {
+                        const std::string lbl = std::string(ui::icons::Database) + "  Open as SQLite";
                         if (ImGui::MenuItem(lbl.c_str()))
                             if (openCb_) openCb_(fpath, "sqlite");
                     }
 
-                    if (UI::IsPdfFile(fpath)) {
-                        const std::string lbl = std::string(Icons::ExternalLink) + "  Open PDF";
+                    if (ui::IsPdfFile(fpath)) {
+                        const std::string lbl = std::string(ui::icons::ExternalLink) + "  Open PDF";
                         if (ImGui::MenuItem(lbl.c_str()))
                             if (openCb_) openCb_(fpath, "system");
                     }
 
-                    if (UI::IsExecutableFile(fpath)) {
-                        const std::string lbl = std::string(Icons::Play) + "  Launch";
+                    if (ui::IsExecutableFile(fpath)) {
+                        const std::string lbl = std::string(ui::icons::Play) + "  Launch";
                         if (ImGui::MenuItem(lbl.c_str()))
                             if (openCb_) openCb_(fpath, "system");
+                    }
+
+                    if (ui::IsTextFile(fpath)) {
+                        const std::string lbl = std::string(ui::icons::File) + "  Open as Text";
+                        if (ImGui::MenuItem(lbl.c_str()))
+                            if (openCb_) openCb_(fpath, "text");
                     }
 
                     ImGui::Separator();
@@ -932,3 +940,4 @@ void DataBrowser::DrawMainContent()
 
     ImGui::EndChild();
 }
+} // namespace datagrid

@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace UI {
+namespace datagrid::ui {
 
 /// Multi-tab read-only text viewer backed by ImGui::InputTextMultiline.
 ///
@@ -60,4 +60,4 @@ class TextArea
     ImFont*          codeFont_   = nullptr; ///< Set via SetCodeFont(); null = default font
 };
 
-} // namespace UI
+} // namespace datagrid::ui

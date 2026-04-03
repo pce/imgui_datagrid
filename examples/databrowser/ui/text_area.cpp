@@ -1,5 +1,6 @@
 #include "text_area.hpp"
 #include "filetype_sniffer.hpp"
+#include "../io/platform.hpp"
 
 #include "imgui.h"
 
@@ -13,7 +14,7 @@
 #   define TEXTAREA_MOD_KEY (ImGui::GetIO().KeyCtrl)
 #endif
 
-namespace UI {
+namespace datagrid::ui {
 
 void TextArea::OpenFile(const std::filesystem::path& path, std::string language_hint)
 {
@@ -45,13 +46,8 @@ void TextArea::LoadContent(Tab& tab)
     const auto fileSize = std::filesystem::file_size(tab.path, ec);
     if (ec) { tab.content = "[error: " + ec.message() + "]"; return; }
 
-#ifdef _WIN32
-    std::FILE* raw = ::_wfopen(std::filesystem::path(tab.path).c_str(), L"rb");
-#else
-    std::FILE* raw = std::fopen(tab.path.c_str(), "rb");
-#endif
-    if (!raw) { tab.content = "[error: cannot open file]"; return; }
-    std::unique_ptr<std::FILE, decltype(&std::fclose)> f(raw, &std::fclose);
+    auto f = io::OpenBinaryFile(std::filesystem::path(tab.path));
+    if (!f) { tab.content = "[error: cannot open file]"; return; }
 
     const std::size_t readSz = std::min(fileSize, kMaxFileBytes);
     tab.truncated            = fileSize > kMaxFileBytes;
@@ -156,5 +152,5 @@ void TextArea::Render()
     ImGui::EndTabBar();
 }
 
-} // namespace UI
+} // namespace datagrid::ui
 

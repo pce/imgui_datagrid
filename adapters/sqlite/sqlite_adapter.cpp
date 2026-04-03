@@ -9,10 +9,10 @@
 #include <vector>
 
 namespace {
-const Adapters::RegisterAdapter<Adapters::SQLiteAdapter> kSQLiteReg{"sqlite"};
+const datagrid::adapters::RegisterAdapter<datagrid::adapters::SQLiteAdapter> kSQLiteReg{"sqlite"};
 }
 
-namespace Adapters {
+namespace datagrid::adapters {
 
 struct SQLiteAdapter::Impl
 {
@@ -332,7 +332,7 @@ QueryResult SQLiteAdapter::Execute(const std::string& sql) const
     return result;
 }
 
-std::expected<void, Adapters::Error>
+std::expected<void, Error>
 SQLiteAdapter::UpdateRow(const std::string&                                  table,
                          const std::unordered_map<std::string, std::string>& pkValues,
                          const std::unordered_map<std::string, std::string>& newValues)
@@ -341,7 +341,7 @@ SQLiteAdapter::UpdateRow(const std::string&                                  tab
         return {};
 
     return require_writable()
-        .and_then([&] { return Utils::require(!pkValues.empty(), Error{"No primary key supplied"}); })
+        .and_then([&] { return require(!pkValues.empty(), Error{"No primary key supplied"}); })
         .and_then([&]() -> std::expected<void, Error> {
             std::string              sql = "UPDATE " + table + " SET ";
             std::vector<std::string> binds;
@@ -379,11 +379,11 @@ SQLiteAdapter::UpdateRow(const std::string&                                  tab
         });
 }
 
-std::expected<void, Adapters::Error>
+std::expected<void, Error>
 SQLiteAdapter::InsertRow(const std::string& table, const std::unordered_map<std::string, std::string>& values)
 {
     return require_writable()
-        .and_then([&] { return Utils::require(!values.empty(), Error{"No column values supplied"}); })
+        .and_then([&] { return require(!values.empty(), Error{"No column values supplied"}); })
         .and_then([&]() -> std::expected<void, Error> {
             std::string              cols, placeholders;
             std::vector<std::string> binds;
@@ -414,11 +414,11 @@ SQLiteAdapter::InsertRow(const std::string& table, const std::unordered_map<std:
         });
 }
 
-std::expected<void, Adapters::Error>
+std::expected<void, Error>
 SQLiteAdapter::DeleteRow(const std::string& table, const std::unordered_map<std::string, std::string>& pkValues)
 {
     return require_writable()
-        .and_then([&] { return Utils::require(!pkValues.empty(), Error{"No primary key values supplied"}); })
+        .and_then([&] { return require(!pkValues.empty(), Error{"No primary key values supplied"}); })
         .and_then([&]() -> std::expected<void, Error> {
             std::string              sql = "DELETE FROM " + table + " WHERE ";
             std::vector<std::string> binds;
@@ -445,4 +445,4 @@ SQLiteAdapter::DeleteRow(const std::string& table, const std::unordered_map<std:
         });
 }
 
-} // namespace Adapters
+} // namespace datagrid::adapters

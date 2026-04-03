@@ -1,11 +1,11 @@
 #pragma once
 #include "../data_source.hpp"
-#include "../query/tabular_query.hpp"
+#include "../utils/tabular_query.hpp"
 
 #include <string>
 #include <vector>
 
-namespace Adapters {
+namespace datagrid::adapters {
 
 class CsvAdapter final : public IDataSource
 {
@@ -54,7 +54,7 @@ class CsvAdapter final : public IDataSource
     [[nodiscard]] std::vector<std::vector<std::string>> ApplyFilters(const DataQuery& q) const;
 
     /// Build a TabularSoA from the loaded data; all columns default to Text.
-    [[nodiscard]] Query::TabularSoA BuildSoA() const;
+    [[nodiscard]] TabularSoA BuildSoA() const;
 };
 
-} // namespace Adapters
+} // namespace datagrid::adapters

@@ -2,8 +2,7 @@
 #include "stb_image.h"
 #include <filesystem>
 
-
-
+namespace datagrid::io {
 
 sg_sampler ImageCache::DefaultSampler()
 {
@@ -95,3 +94,5 @@ void ImageCache::Clear()
         sampler_ = {SG_INVALID_ID};
     }
 }
+
+} // namespace datagrid::io

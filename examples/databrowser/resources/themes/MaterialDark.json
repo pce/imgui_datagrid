@@ -1,0 +1,75 @@
+{
+  "id": "MaterialDark",
+  "title": "Material Dark",
+  "dark": true,
+  "palette": {
+    "bg0": [
+      0.11,
+      0.106,
+      0.122,
+      1.0
+    ],
+    "bg1": [
+      0.188,
+      0.184,
+      0.204,
+      1.0
+    ],
+    "bg2": [
+      0.239,
+      0.235,
+      0.259,
+      1.0
+    ],
+    "fg0": [
+      0.902,
+      0.882,
+      0.898,
+      1.0
+    ],
+    "fg1": [
+      0.576,
+      0.561,
+      0.6,
+      1.0
+    ],
+    "brd": [
+      0.351,
+      0.341,
+      0.369,
+      1.0
+    ],
+    "acc": [
+      0.816,
+      0.737,
+      1.0,
+      1.0
+    ],
+    "acc2": [
+      0.31,
+      0.216,
+      0.545,
+      1.0
+    ]
+  },
+  "style": {
+    "rounding": 8.0,
+    "item_spacing": 8.0,
+    "frame_padding": 8.0,
+    "font_scale": 1.0
+  },
+  "font": {
+    "main": {
+      "path": "fonts/Roboto-Medium.ttf",
+      "size_px": 15.0
+    },
+    "mono": {
+      "path": "fonts/JetBrainsMono-Thin.ttf",
+      "size_px": 14.0
+    },
+    "icon": {
+      "path": "fonts/fa-6-solid-900.otf",
+      "size_px": 14.0
+    }
+  }
+}

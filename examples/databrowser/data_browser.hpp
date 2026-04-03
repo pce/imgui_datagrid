@@ -1,5 +1,6 @@
 #pragma once
 #include "adapters/data_source.hpp"
+#include "imgui.h"
 #include "imgui_datagrid.hpp"
 #include "inspector/schema_inspector.hpp"
 #include "ui/hex_view.hpp"
@@ -10,6 +11,10 @@
 #include <memory>
 #include <string>
 #include <vector>
+
+#include "io/platform.hpp"
+
+namespace datagrid {
 
 class DataBrowser
 {
@@ -29,7 +34,7 @@ class DataBrowser
     DataBrowser& operator=(DataBrowser&&) = delete;
 
     /// Inject the current layout before calling Render().
-    void SetLayout(const UI::ResponsiveLayout& layout);
+void SetLayout(const ui::ResponsiveLayout& layout);
 
     /// Callback invoked once after columns are built from the adapter schema.
     /// Use it to set per-column widths, types, renderers, and visibility.
@@ -100,6 +105,10 @@ class DataBrowser
     using OpenCallback = std::function<void(const std::string& path, const std::string& how)>;
     void SetOpenCallback(OpenCallback fn);
 
+    /// Set the monospace font forwarded to the byte-inspector hex view.
+    /// Call whenever the active theme changes.
+    void SetCodeFont(ImFont* f) noexcept;
+
     /// Column keys for the current table (order matches GetSource()->GetColumns()).
     /// Used by drag-source callbacks to build the key=value row encoding.
     [[nodiscard]] std::vector<std::string> GetCurrentColumnKeys() const;
@@ -160,7 +169,7 @@ class DataBrowser
 
     std::vector<Adapters::TableInfo> tables;
 
-    UI::ResponsiveLayout layout_;
+    ui::ResponsiveLayout layout_;
 
     bool        showSidebar       = true;
     bool        phoneOverlayOpen_ = false;
@@ -173,7 +182,7 @@ class DataBrowser
     std::string searchColumn;
     char        searchBuf[256] = {};
 
-    UI::SqlEditorState sqlEditor_; ///< Embedded SQL editor widget state
+    ui::SqlEditorState sqlEditor_; ///< Embedded SQL editor widget state
 
     std::string lastError;
     std::string statusMsg;
@@ -197,8 +206,8 @@ class DataBrowser
     bool columnsReady = false;
     bool schemaLoaded = false;
 
-    Inspector::SchemaInspector inspector_;
-    UI::HexViewDialog          hexView_; ///< Byte-inspector popup (context menu → Inspect Bytes…)
+    inspector::SchemaInspector inspector_;
+    ui::HexViewDialog          hexView_; ///< Byte-inspector popup (context menu → Inspect Bytes…)
 
     ColumnCustomizer columnCustomizer;
     RowCallback      onRowClick;
@@ -214,3 +223,6 @@ class DataBrowser
     std::string idSuffix_; ///< "_N" — appended to ImGui IDs
     static int  nextInstanceId_;
 };
+
+
+} // namespace datagrid

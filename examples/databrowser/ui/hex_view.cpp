@@ -1,5 +1,6 @@
 #include "hex_view.hpp"
 #include "filetype_sniffer.hpp"
+#include "../io/platform.hpp"
 
 #include "imgui.h"
 
@@ -7,7 +8,7 @@
 #include <cstdio>
 #include <memory>
 
-namespace UI {
+namespace datagrid::ui {
 
 static std::string FormatBytes(std::size_t n)
 {
@@ -132,13 +133,7 @@ void HexViewDialog::OpenFile(const std::filesystem::path& path)
     const std::size_t total = std::filesystem::file_size(path, ec);
     fullSize_ = ec ? 0 : total;
 
-#ifdef _WIN32
-    std::FILE* raw = ::_wfopen(path.c_str(), L"rb");
-#else
-    std::FILE* raw = std::fopen(path.c_str(), "rb");
-#endif
-    if (raw) {
-        std::unique_ptr<std::FILE, decltype(&std::fclose)> f(raw, &std::fclose);
+    if (auto f = io::OpenBinaryFile(path)) {
         const std::size_t readSz = std::min(ec ? kMaxPreviewBytes : total, kMaxPreviewBytes);
         data_.resize(readSz);
         const std::size_t got = std::fread(data_.data(), 1, readSz, f.get());
@@ -265,7 +260,7 @@ void HexViewDialog::RenderStandard()
 
     const float footerH = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
 
-    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
+    ImGui::PushFont(font_);   // nullptr = ImGui default (always monospace-like)
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.05f, 0.05f, 0.06f, 1.0f));
     ImGui::BeginChild("##hexstd",
                       ImVec2(0.0f, ImGui::GetContentRegionAvail().y - footerH),
@@ -355,7 +350,7 @@ void HexViewDialog::RenderInspector()
     const float footerH = ImGui::GetFrameHeightWithSpacing() * 2.0f
                         + ImGui::GetStyle().ItemSpacing.y;
 
-    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
+    ImGui::PushFont(font_);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.04f, 0.04f, 0.05f, 1.0f));
     ImGui::BeginChild("##hexlbl",
                       ImVec2(0.0f, ImGui::GetContentRegionAvail().y - footerH),
@@ -505,7 +500,7 @@ void HexViewDialog::RenderTextHex()
 
     const float footerH = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
 
-    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
+    ImGui::PushFont(font_);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.05f, 0.05f, 0.06f, 1.0f));
     ImGui::BeginChild("##hextxt",
                       ImVec2(0.0f, ImGui::GetContentRegionAvail().y - footerH),
@@ -563,4 +558,4 @@ void HexViewDialog::RenderTextHex()
     }
 }
 
-} // namespace UI
+} // namespace datagrid::ui

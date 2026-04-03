@@ -3,7 +3,7 @@
 #include <format>
 #include <ranges>
 
-namespace Adapters {
+namespace datagrid::adapters {
 
 std::vector<AdapterEntry>& AdapterRegistry::Table() noexcept
 {
@@ -72,4 +72,4 @@ int AdapterRegistry::Count() noexcept
     return static_cast<int>(Table().size());
 }
 
-} // namespace Adapters
+} // namespace datagrid::adapters

@@ -1,7 +1,7 @@
 #pragma once
 #include "imgui.h"
 
-namespace Icons {
+namespace datagrid::ui::icons {
 
 // Atlas merge range — pass kFAGlyphRanges to ImFontConfig::GlyphRanges
 inline constexpr ImWchar kFAGlyphRanges[] = {0xE000u, 0xF8FFu, 0u};
@@ -49,4 +49,4 @@ inline constexpr const char* Code          = "\xef\x84\xa1"; // U+F121  code
 inline constexpr const char* ExternalLink = "\xef\x82\x8e"; // U+F08E  arrow-up-right-from-square
 inline constexpr const char* Play         = "\xef\x81\x8b"; // U+F04B  play
 
-} // namespace Icons
+} // namespace datagrid::ui::icons

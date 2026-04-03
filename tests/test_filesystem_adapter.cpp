@@ -10,6 +10,8 @@
 #include <string>
 #include <unistd.h>
 
+using namespace datagrid::adapters;
+
 namespace fs = std::filesystem;
 
 struct TempDir
@@ -47,8 +49,8 @@ struct TempDir
 TEST_CASE("FilesystemAdapter: connect to valid dir", "[fs_adapter]")
 {
     TempDir                     tmp;
-    Adapters::FilesystemAdapter adapter;
-    Adapters::ConnectionParams  p;
+    FilesystemAdapter adapter;
+    ConnectionParams  p;
     p.connectionString = tmp.dir.string();
 
     REQUIRE(adapter.Connect(p).has_value());
@@ -58,8 +60,8 @@ TEST_CASE("FilesystemAdapter: connect to valid dir", "[fs_adapter]")
 
 TEST_CASE("FilesystemAdapter: connect to non-existent dir", "[fs_adapter]")
 {
-    Adapters::FilesystemAdapter adapter;
-    Adapters::ConnectionParams  p;
+    FilesystemAdapter adapter;
+    ConnectionParams  p;
     p.connectionString = "/no/such/path/dg_fs_missing_xyz";
 
     CHECK_FALSE(adapter.Connect(p).has_value());
@@ -70,8 +72,8 @@ TEST_CASE("FilesystemAdapter: connect to non-existent dir", "[fs_adapter]")
 TEST_CASE("FilesystemAdapter: Disconnect resets state", "[fs_adapter]")
 {
     TempDir                     tmp;
-    Adapters::FilesystemAdapter adapter;
-    Adapters::ConnectionParams  p;
+    FilesystemAdapter adapter;
+    ConnectionParams  p;
     p.connectionString = tmp.dir.string();
 
     REQUIRE(adapter.Connect(p).has_value());
@@ -84,8 +86,8 @@ TEST_CASE("FilesystemAdapter: Disconnect resets state", "[fs_adapter]")
 TEST_CASE("FilesystemAdapter: AdapterLabel contains path", "[fs_adapter]")
 {
     TempDir                     tmp;
-    Adapters::FilesystemAdapter adapter;
-    Adapters::ConnectionParams  p;
+    FilesystemAdapter adapter;
+    ConnectionParams  p;
     p.connectionString = tmp.dir.string();
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -99,8 +101,8 @@ TEST_CASE("FilesystemAdapter: AdapterLabel contains path", "[fs_adapter]")
 TEST_CASE("FilesystemAdapter: ListTables returns entries", "[fs_adapter]")
 {
     TempDir                     tmp;
-    Adapters::FilesystemAdapter adapter;
-    Adapters::ConnectionParams  p;
+    FilesystemAdapter adapter;
+    ConnectionParams  p;
     p.connectionString = tmp.dir.string();
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -118,8 +120,8 @@ TEST_CASE("FilesystemAdapter: ListTables returns entries", "[fs_adapter]")
 TEST_CASE("FilesystemAdapter: GetColumns returns filesystem columns", "[fs_adapter]")
 {
     TempDir                     tmp;
-    Adapters::FilesystemAdapter adapter;
-    Adapters::ConnectionParams  p;
+    FilesystemAdapter adapter;
+    ConnectionParams  p;
     p.connectionString = tmp.dir.string();
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -143,8 +145,8 @@ TEST_CASE("FilesystemAdapter: GetColumns returns filesystem columns", "[fs_adapt
 TEST_CASE("FilesystemAdapter: Execute SQL SELECT *", "[fs_adapter]")
 {
     TempDir                     tmp;
-    Adapters::FilesystemAdapter adapter;
-    Adapters::ConnectionParams  p;
+    FilesystemAdapter adapter;
+    ConnectionParams  p;
     p.connectionString = tmp.dir.string();
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -157,8 +159,8 @@ TEST_CASE("FilesystemAdapter: Execute SQL SELECT *", "[fs_adapter]")
 TEST_CASE("FilesystemAdapter: Execute SQL WHERE extension", "[fs_adapter]")
 {
     TempDir                     tmp;
-    Adapters::FilesystemAdapter adapter;
-    Adapters::ConnectionParams  p;
+    FilesystemAdapter adapter;
+    ConnectionParams  p;
     p.connectionString = tmp.dir.string();
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -179,8 +181,8 @@ TEST_CASE("FilesystemAdapter: Execute SQL WHERE extension", "[fs_adapter]")
 TEST_CASE("FilesystemAdapter: Execute SQL ORDER BY size DESC LIMIT 1", "[fs_adapter]")
 {
     TempDir                     tmp;
-    Adapters::FilesystemAdapter adapter;
-    Adapters::ConnectionParams  p;
+    FilesystemAdapter adapter;
+    ConnectionParams  p;
     p.connectionString = tmp.dir.string();
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -195,8 +197,8 @@ TEST_CASE("FilesystemAdapter: Execute SQL ORDER BY size DESC LIMIT 1", "[fs_adap
 TEST_CASE("FilesystemAdapter: readOnly mode SupportsWrite false", "[fs_adapter]")
 {
     TempDir                     tmp;
-    Adapters::FilesystemAdapter adapter;
-    Adapters::ConnectionParams  p;
+    FilesystemAdapter adapter;
+    ConnectionParams  p;
     p.connectionString = tmp.dir.string();
     p.readOnly         = true;
 
@@ -208,8 +210,8 @@ TEST_CASE("FilesystemAdapter: readOnly mode SupportsWrite false", "[fs_adapter]"
 TEST_CASE("FilesystemAdapter: AdapterLabel shows read-only suffix", "[fs_adapter]")
 {
     TempDir                     tmp;
-    Adapters::FilesystemAdapter adapter;
-    Adapters::ConnectionParams  p;
+    FilesystemAdapter adapter;
+    ConnectionParams  p;
     p.connectionString = tmp.dir.string();
     p.readOnly         = true;
 
@@ -219,7 +221,7 @@ TEST_CASE("FilesystemAdapter: AdapterLabel shows read-only suffix", "[fs_adapter
 
 TEST_CASE("FilesystemAdapter: not connected Execute returns error", "[fs_adapter]")
 {
-    Adapters::FilesystemAdapter adapter; // not connected
+    FilesystemAdapter adapter; // not connected
     auto                        result = adapter.Execute("SELECT * FROM '/some/path'");
     CHECK_FALSE(result.ok());
     CHECK_FALSE(result.error.empty());

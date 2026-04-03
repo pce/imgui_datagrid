@@ -1,5 +1,5 @@
 #include "fluent_query.hpp"
-#include "../platform_detect.hpp"
+#include "../../platform.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -8,7 +8,9 @@
 #include <ranges>
 #include <string>
 
-namespace Adapters::Fs {
+namespace datagrid::adapters {
+
+
 
 namespace {
 std::string FmtSize(std::uintmax_t bytes, bool isDir)
@@ -32,31 +34,45 @@ std::string FmtTime(const fs::file_time_type& t)
     if (t == fs::file_time_type{})
         return "—";
     using namespace std::chrono;
-    const auto sysTp = time_point_cast<system_clock::duration>(file_clock::to_sys(t));
-    const std::time_t tt = system_clock::to_time_t(sysTp);
-    std::tm tmBuf{};
-    if (!Platform::localtime_safe(&tt, &tmBuf))
-        return "?";
-    return std::format("{:04}-{:02}-{:02} {:02}:{:02}",
-        tmBuf.tm_year + 1900, tmBuf.tm_mon + 1, tmBuf.tm_mday,
-        tmBuf.tm_hour, tmBuf.tm_min);
+    // file_clock duration may use __int128; cast to system_clock precision first.
+    const auto sys_tp = time_point_cast<system_clock::duration>(file_clock::to_sys(t));
+    const std::time_t tt = system_clock::to_time_t(sys_tp);
+    std::tm local{};
+#ifdef _WIN32
+    ::localtime_s(&local, &tt); // thread-safe (Windows)
+#else
+    ::localtime_r(&tt, &local); // thread-safe (POSIX)
+#endif
+    char buf[20];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &local);
+    return buf;
 }
 
 std::string FmtPerms(fs::perms p)
 {
-    auto bit = [&](fs::perms b, char c) { return (p & b) != fs::perms::none ? c : '-'; };
-    char s[10];
-    s[0] = bit(fs::perms::owner_read, 'r');
-    s[1] = bit(fs::perms::owner_write, 'w');
-    s[2] = bit(fs::perms::owner_exec, 'x');
-    s[3] = bit(fs::perms::group_read, 'r');
-    s[4] = bit(fs::perms::group_write, 'w');
-    s[5] = bit(fs::perms::group_exec, 'x');
-    s[6] = bit(fs::perms::others_read, 'r');
-    s[7] = bit(fs::perms::others_write, 'w');
-    s[8] = bit(fs::perms::others_exec, 'x');
-    s[9] = '\0';
-    return s;
+    if constexpr (io::Platform::isWindows) {
+        // Windows only surfaces read/write via std::filesystem::perms.
+        // Report as a short "rw-" / "r--" string — exec is meaningless on Windows.
+        const bool r = (p & fs::perms::owner_read)  != fs::perms::none;
+        const bool w = (p & fs::perms::owner_write) != fs::perms::none;
+        char s[4] = {r ? 'r' : '-', w ? 'w' : '-', '-', '\0'};
+        return s;
+    } else {
+        // POSIX: full rwxrwxrwx (owner / group / others)
+        auto bit = [&](fs::perms b, char c) { return (p & b) != fs::perms::none ? c : '-'; };
+        char s[10];
+        s[0] = bit(fs::perms::owner_read,   'r');
+        s[1] = bit(fs::perms::owner_write,  'w');
+        s[2] = bit(fs::perms::owner_exec,   'x');
+        s[3] = bit(fs::perms::group_read,   'r');
+        s[4] = bit(fs::perms::group_write,  'w');
+        s[5] = bit(fs::perms::group_exec,   'x');
+        s[6] = bit(fs::perms::others_read,  'r');
+        s[7] = bit(fs::perms::others_write, 'w');
+        s[8] = bit(fs::perms::others_exec,  'x');
+        s[9] = '\0';
+        return s;
+    }
 }
 
 FilesystemEntry MakeEntry(const fs::directory_entry& de, bool followSymlinks)
@@ -81,7 +97,7 @@ FilesystemEntry MakeEntry(const fs::directory_entry& de, bool followSymlinks)
     // status follows symlinks; symlink_status reports the link itself.
     // On Windows the distinction is moot — always use status.
     const auto status = [&]() {
-        if constexpr (Platform::isWindows)
+        if constexpr (io::Platform::isWindows)
             return fs::status(target, ec);
         else
             return followSymlinks ? fs::status(target, ec)
@@ -135,7 +151,7 @@ std::vector<ColumnInfo> StandardColumns()
         {"kind",       "TEXT", false, false},
         {"size",       "TEXT", true,  false},
         {"modified",   "TEXT", true,  false},
-        {std::string{Platform::kPermColName}, "TEXT", true, false},
+        {std::string{io::Platform::kPermColName}, "TEXT", true, false},
         {"path",       "TEXT", false, false},
     };
 }
@@ -358,20 +374,26 @@ FluentQuery& FluentQuery::offset(int n)
     offset_ = n;
     return *this;
 }
+FluentQuery& FluentQuery::with_access(std::function<bool(const fs::path&)> fn)
+{
+    accessCheck_ = std::move(fn);
+    return *this;
+}
 
 std::vector<FilesystemEntry> FluentQuery::entries() const
 {
+    // VFS gate: if a check was injected and denies access, return nothing.
+    if (accessCheck_ && !accessCheck_(dir_))
+        return {};
+
     std::vector<FilesystemEntry> all;
     std::error_code              ec;
 
     constexpr bool kFollowSymlinks = true;
 
     auto addEntry = [&](const fs::directory_entry& de) {
-        if (!showHidden_ && !de.path().filename().empty()) {
-            const auto fname = de.path().filename().string();
-            if (!fname.empty() && fname[0] == '.')
-                return;
-        }
+        if (!showHidden_ && io::Platform::IsHidden(de.path()))
+            return;
         all.push_back(MakeEntry(de, kFollowSymlinks));
     };
 
@@ -397,24 +419,24 @@ std::vector<FilesystemEntry> FluentQuery::entries() const
         //          path(5) extension(6) ext(7=alias) modtime-num(8)
         const size_t n = all.size();
 
-        Query::TabularSoA soa;
+        TabularSoA soa;
         soa.rowCount = n;
         soa.colNames = {"name", "kind", "size", "modified",
-                        std::string{Platform::kPermColName},
+                        std::string{io::Platform::kPermColName},
                         "path", "extension", "ext", "modtime"};
         soa.colTypes = {
-            Query::ColType::Text,    // name
-            Query::ColType::Text,    // kind
-            Query::ColType::Numeric, // size
-            Query::ColType::Text,    // modified
-            Query::ColType::Text,    // permissions / attributes
-            Query::ColType::Text,    // path
-            Query::ColType::Text,    // extension
-            Query::ColType::Text,    // ext (alias)
-            Query::ColType::Numeric, // modtime (raw int64 for range queries)
+            ColType::Text,    // name
+            ColType::Text,    // kind
+            ColType::Numeric, // size
+            ColType::Text,    // modified
+            ColType::Text,    // permissions / attributes
+            ColType::Text,    // path
+            ColType::Text,    // extension
+            ColType::Text,    // ext (alias)
+            ColType::Numeric, // modtime (raw int64 for range queries)
         };
         const size_t ncols    = soa.colNames.size();
-        const size_t permCol  = soa.col_index(Platform::kPermColName);
+        const size_t permCol  = soa.col_index(io::Platform::kPermColName);
         soa.strCols.resize(ncols);
         soa.numCols.resize(ncols);
         for (auto& v : soa.strCols)
@@ -437,7 +459,7 @@ std::vector<FilesystemEntry> FluentQuery::entries() const
             soa.numCols[8].push_back(static_cast<int64_t>(e.modTime.time_since_epoch().count()));
         }
 
-        const std::vector<uint8_t> mask = Query::TabularQuery::filter_mask(sqlPlan_, soa);
+        const std::vector<uint8_t> mask = TabularQuery::filter_mask(sqlPlan_, soa);
 
         std::vector<FilesystemEntry> filtered;
         filtered.reserve(n);
@@ -474,7 +496,7 @@ std::vector<FilesystemEntry> FluentQuery::entries() const
     for (size_t i = 0; i < all.size(); ++i)
         keys.push_back({i, byName ? ToLower(all[i].name) : std::string{}});
 
-    std::stable_sort(keys.begin(), keys.end(), [&](const SortKey& ai, const SortKey& bi) {
+    std::ranges::stable_sort(keys, [&](const SortKey& ai, const SortKey& bi) {
         const FilesystemEntry& a = all[ai.idx];
         const FilesystemEntry& b = all[bi.idx];
         if (doDF) {
@@ -572,10 +594,10 @@ QueryResult FluentQuery::execute() const
 
 std::expected<FluentQuery, std::string> FluentQuery::from_sql(std::string_view sql)
 {
-    auto planRes = Query::TabularQuery::parse(sql);
+    auto planRes = TabularQuery::parse(sql);
     if (!planRes)
         return std::unexpected(planRes.error());
-    Query::QueryPlan plan = std::move(*planRes);
+    QueryPlan plan = std::move(*planRes);
 
     // Handle glob-style recursive suffix: /path/** → recursive + strip /**
     std::string path = plan.fromSource;
@@ -606,4 +628,4 @@ std::expected<FluentQuery, std::string> FluentQuery::from_sql(std::string_view s
     return q;
 }
 
-} // namespace Adapters::Fs
+} // namespace datagrid::adapters

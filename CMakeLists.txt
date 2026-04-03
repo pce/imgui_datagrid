@@ -316,6 +316,22 @@ if (DATAGRID_USE_DUCKDB)
         add_library(duckdb_amalgamation STATIC ${duckdb_src_SOURCE_DIR}/duckdb.cpp)
         target_include_directories(duckdb_amalgamation PUBLIC ${duckdb_src_SOURCE_DIR})
         target_compile_options(duckdb_amalgamation PRIVATE -w)
+        # DuckDB's amalgamation is compiled with the same LLVM libc++ headers as
+        # the rest of the project (new nqe220101 ABI) but the macOS system
+        # libc++.1.dylib from the dyld shared cache uses the old string ABI.
+        # Both versions coexist because Apple frameworks implicitly pull in the
+        # system dylib.  When std::locale (embedded in every std::fstream) is
+        # destroyed, the system libc++ vtable path may interpret the new-ABI
+        # std::string fields with old-ABI offsets and call delete on an interior
+        # pointer → ASAN "bad-free".  json loading/saving in theme_customizer and
+        # settings avoids std::fstream entirely (see io/file_io.hpp), eliminating
+        # the locale destructor from those paths.
+        # As an extra precaution, exclude DuckDB from ASAN instrumentation so its
+        # template instantiations do not add additional red-zone poison around the
+        # locale's internal buffers.
+        if (TARGET datagrid_asan)
+            target_compile_options(duckdb_amalgamation PRIVATE -fno-sanitize=address)
+        endif()
         add_library(duckdb::duckdb ALIAS duckdb_amalgamation)
         set(DATAGRID_HAVE_DUCKDB TRUE)
         message(STATUS "[DuckDB] Building amalgamation from ${duckdb_src_SOURCE_DIR}")
@@ -378,7 +394,7 @@ add_library(datagrid_adapters STATIC    adapters/adapter_registry.cpp
     adapters/sqlite/sqlite_adapter.cpp
     adapters/filesystem/filesystem_adapter.cpp
     adapters/filesystem/fluent_query.cpp
-    adapters/query/tabular_query.cpp
+        adapters/utils/tabular_query.cpp
     adapters/utils/type_inferrer.cpp
 )
 target_include_directories(datagrid_adapters PUBLIC

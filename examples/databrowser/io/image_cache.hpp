@@ -10,6 +10,9 @@
 ///
 /// All sg_* calls require sg_setup() to have already run.
 /// Call Clear() before sg_shutdown().
+
+namespace datagrid::io {
+
 class ImageCache
 {
   public:
@@ -47,3 +50,5 @@ class ImageCache
     std::unordered_map<std::string, Entry> cache_;
     sg_sampler                             sampler_ = {SG_INVALID_ID};
 };
+
+} // namespace datagrid::io

@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace Adapters {
+namespace datagrid::adapters {
 
 using Error = std::string;
 
@@ -121,33 +121,26 @@ class IDataSource
     /// Update a single row identified by `pkValues`.
     /// `newValues` maps column-name → new string value.
     /// Default: returns an error (read-only adapter).
-    virtual std::expected<void, Error> UpdateRow(const std::string&                                  table,
-                                                 const std::unordered_map<std::string, std::string>& pkValues,
-                                                 const std::unordered_map<std::string, std::string>& newValues)
+    virtual std::expected<void, Error> UpdateRow([[maybe_unused]] const std::string&                                  table,
+                                                 [[maybe_unused]] const std::unordered_map<std::string, std::string>& pkValues,
+                                                 [[maybe_unused]] const std::unordered_map<std::string, std::string>& newValues)
     {
-        (void)table;
-        (void)pkValues;
-        (void)newValues;
         return std::unexpected(Error{"Adapter is read-only"});
     }
 
     /// Insert a new row.  `values` maps column-name → string value.
     /// Omit auto-increment / generated columns — the DB assigns them.
-    virtual std::expected<void, Error> InsertRow(const std::string&                                  table,
-                                                 const std::unordered_map<std::string, std::string>& values)
+    virtual std::expected<void, Error> InsertRow([[maybe_unused]] const std::string&                                  table,
+                                                 [[maybe_unused]] const std::unordered_map<std::string, std::string>& values)
     {
-        (void)table;
-        (void)values;
         return std::unexpected(Error{"Adapter is read-only"});
     }
 
     /// Delete the row identified by `pkValues`.
     /// `pkValues` maps PK column-name → string value.
-    virtual std::expected<void, Error> DeleteRow(const std::string&                                  table,
-                                                 const std::unordered_map<std::string, std::string>& pkValues)
+    virtual std::expected<void, Error> DeleteRow([[maybe_unused]]   const std::string&                                  table,
+                                                [[maybe_unused]]  const std::unordered_map<std::string, std::string>& pkValues)
     {
-        (void)table;
-        (void)pkValues;
         return std::unexpected(Error{"Adapter is read-only"});
     }
 
@@ -181,4 +174,9 @@ class IDataSource
 
 using DataSourcePtr = std::unique_ptr<IDataSource>;
 
-} // namespace Adapters
+} // namespace datagrid::adapters
+
+/// Backward-compat alias — existing code using the old `Adapters::` prefix
+/// continues to compile without changes.
+namespace Adapters = datagrid::adapters;
+

@@ -3,8 +3,7 @@
 #include <optional>
 #include <string_view>
 
-namespace Adapters {
-
+namespace datagrid::adapters {
 enum class AdapterKind : std::uint8_t
 {
     SQLite,
@@ -41,4 +40,4 @@ enum class AdapterKind : std::uint8_t
     return std::nullopt;
 }
 
-} // namespace Adapters
+} // namespace datagrid::adapters

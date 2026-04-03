@@ -5,8 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace Adapters {
-
+namespace datagrid::adapters {
 /// Minimal requirement: execute raw SQL and get a QueryResult back.
 /// Satisfied by IDataSource and any duck-typed wrapper around it.
 template<typename DB>
@@ -63,4 +62,4 @@ concept ConnectableAdapter = DataSourceLike<DB> && requires(DB& db, const Connec
     { db.LastError() } -> std::convertible_to<std::string>;
 };
 
-} // namespace Adapters
+} // namespace datagrid::adapters

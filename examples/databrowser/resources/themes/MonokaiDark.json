@@ -1,0 +1,75 @@
+{
+  "id": "MonokaiDark",
+  "title": "Monokai Dark",
+  "dark": true,
+  "palette": {
+    "bg0": [
+      0.176,
+      0.165,
+      0.18,
+      1.0
+    ],
+    "bg1": [
+      0.224,
+      0.208,
+      0.228,
+      1.0
+    ],
+    "bg2": [
+      0.271,
+      0.255,
+      0.275,
+      1.0
+    ],
+    "fg0": [
+      0.988,
+      0.988,
+      0.98,
+      1.0
+    ],
+    "fg1": [
+      0.502,
+      0.478,
+      0.498,
+      1.0
+    ],
+    "brd": [
+      0.239,
+      0.224,
+      0.243,
+      1.0
+    ],
+    "acc": [
+      0.663,
+      0.863,
+      0.463,
+      1.0
+    ],
+    "acc2": [
+      0.42,
+      0.38,
+      0.569,
+      1.0
+    ]
+  },
+  "style": {
+    "rounding": 4.0,
+    "item_spacing": 8.0,
+    "frame_padding": 6.0,
+    "font_scale": 1.0
+  },
+  "font": {
+    "main": {
+      "path": "fonts/Roboto-Medium.ttf",
+      "size_px": 15.0
+    },
+    "mono": {
+      "path": "fonts/JetBrainsMono-Thin.ttf",
+      "size_px": 14.0
+    },
+    "icon": {
+      "path": "fonts/fa-6-solid-900.otf",
+      "size_px": 14.0
+    }
+  }
+}

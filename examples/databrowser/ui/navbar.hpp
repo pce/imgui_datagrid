@@ -1,7 +1,7 @@
 #pragma once
 
 #include "imgui.h"
-#include "../theme.hpp"
+#include "theme.hpp"
 
 #include <array>
 #include <functional>
@@ -9,7 +9,10 @@
 #include <vector>
 
 
-namespace UI {
+namespace datagrid::ui {
+    /// Compact INI blob restoring the default two-panel layout.
+    /// Replace with a real captured ini string if a fixed default layout is needed.
+    inline constexpr const char* kDefaultLayoutIni = "";
     /// Describes one entry in the Navbar "Window" submenu.
     /// Built each frame by the App and passed to Navbar::SetWindows().
     struct WindowEntry
@@ -22,13 +25,14 @@ namespace UI {
     class Navbar
     {
     public:
-        bool wantsQuit       = false;
-        bool wantsFullscreen = false;
-        bool wantsOpen       = false;
+        bool wantsQuit          = false;
+        bool wantsFullscreen    = false;
+        bool wantsOpen          = false;
+        bool wantsThemeCustomizer = false; ///< Toggled by Settings → "Theme Customizer…"
 
-        /// Called after a theme switch (colors + fonts already applied).
-        /// Use this to propagate the new code-font pointer to other widgets.
-        std::function<void()> onThemeApplied;
+        /// Called after a theme switch; receives the newly selected ThemeStyle.
+        /// Use this to apply palette colors and propagate the code-font pointer.
+        std::function<void(ThemeStyle)> onThemeApplied;
 
         void SetWindows(std::vector<WindowEntry> entries) { windows_ = std::move(entries); }
 
@@ -61,34 +65,6 @@ namespace UI {
                 ImGui::EndMenu();
             }
 
-            if (ImGui::BeginMenu("Theme")) {
-                static constexpr std::array<const char*, kThemeCount> kLabels = {
-                    "Solarized Dark",
-                    "Solarized Light",
-                    "Monokai",
-                    "Monokai Dark (Pro)",
-                    "Mona Spaces (Floral)",
-                    "Earth / SUSE",
-                    "Earth / SUSE Dark",
-                    "Neon Spaces",
-                    "DawnBringer 16 \xe2\x80\x94 Dark",
-                    "DawnBringer 16 \xe2\x80\x94 Light",
-                    "Material",
-                    "Material Dark",
-                    "Mono Light",
-                    "Mono Dark",
-                    "DawnBringer \xe2\x80\x94 Light (Argon)",
-                    "DawnBringer \xe2\x80\x94 Dark (Argon)",
-                };
-                for (int i = 0; i < static_cast<int>(kLabels.size()); ++i) {
-                    if (ImGui::MenuItem(kLabels[i], nullptr, currentThemeIndex_ == i)) {
-                        currentThemeIndex_ = i;
-                        theme.ApplyColorTheme(static_cast<ThemeType>(i));
-                        if (onThemeApplied) onThemeApplied();
-                    }
-                }
-                ImGui::EndMenu();
-            }
 
             if (!windows_.empty() && ImGui::BeginMenu("Window")) {
                 for (const auto& w : windows_) {
@@ -100,6 +76,17 @@ namespace UI {
                 ImGui::EndMenu();
             }
 
+            if (ImGui::BeginMenu("Settings")) {
+                if (ImGui::MenuItem("Reset layout")) {
+                    ImGui::LoadIniSettingsFromMemory(kDefaultLayoutIni);
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("Theme Customizer\xe2\x80\xa6")) {
+                    wantsThemeCustomizer = true;
+                }
+                ImGui::EndMenu();
+            }
+
             ImGui::EndMainMenuBar();
         }
 
@@ -107,4 +94,4 @@ namespace UI {
         int                      currentThemeIndex_ = 0;
         std::vector<WindowEntry> windows_;
     };
-}
+} // namespace datagrid::ui

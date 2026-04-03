@@ -1,0 +1,75 @@
+{
+  "id": "DawnBringerLight",
+  "title": "DawnBringer \u2014 Light (Argon)",
+  "dark": false,
+  "palette": {
+    "bg0": [
+      0.871,
+      0.933,
+      0.839,
+      1.0
+    ],
+    "bg1": [
+      0.824,
+      0.667,
+      0.6,
+      1.0
+    ],
+    "bg2": [
+      0.71,
+      0.745,
+      0.855,
+      1.0
+    ],
+    "fg0": [
+      0.078,
+      0.047,
+      0.11,
+      1.0
+    ],
+    "fg1": [
+      0.459,
+      0.443,
+      0.38,
+      1.0
+    ],
+    "brd": [
+      0.522,
+      0.584,
+      0.631,
+      1.0
+    ],
+    "acc": [
+      0.204,
+      0.396,
+      0.141,
+      1.0
+    ],
+    "acc2": [
+      0.204,
+      0.396,
+      0.141,
+      1.0
+    ]
+  },
+  "style": {
+    "rounding": 0.0,
+    "item_spacing": 10.0,
+    "frame_padding": 8.0,
+    "font_scale": 1.0
+  },
+  "font": {
+    "main": {
+      "path": "fonts/Hack-Regular.ttf",
+      "size_px": 14.0
+    },
+    "mono": {
+      "path": "fonts/Hack-Regular.ttf",
+      "size_px": 14.0
+    },
+    "icon": {
+      "path": "fonts/fa-6-solid-900.otf",
+      "size_px": 14.0
+    }
+  }
+}

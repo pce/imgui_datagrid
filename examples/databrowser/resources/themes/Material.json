@@ -1,0 +1,75 @@
+{
+  "id": "Material",
+  "title": "Material",
+  "dark": false,
+  "palette": {
+    "bg0": [
+      0.98,
+      0.969,
+      0.996,
+      1.0
+    ],
+    "bg1": [
+      0.922,
+      0.898,
+      0.937,
+      1.0
+    ],
+    "bg2": [
+      0.878,
+      0.847,
+      0.914,
+      1.0
+    ],
+    "fg0": [
+      0.11,
+      0.106,
+      0.122,
+      1.0
+    ],
+    "fg1": [
+      0.475,
+      0.455,
+      0.494,
+      1.0
+    ],
+    "brd": [
+      0.741,
+      0.718,
+      0.757,
+      1.0
+    ],
+    "acc": [
+      0.404,
+      0.314,
+      0.643,
+      1.0
+    ],
+    "acc2": [
+      0.404,
+      0.314,
+      0.643,
+      1.0
+    ]
+  },
+  "style": {
+    "rounding": 8.0,
+    "item_spacing": 8.0,
+    "frame_padding": 8.0,
+    "font_scale": 1.0
+  },
+  "font": {
+    "main": {
+      "path": "fonts/Roboto-Medium.ttf",
+      "size_px": 15.0
+    },
+    "mono": {
+      "path": "fonts/JetBrainsMono-Thin.ttf",
+      "size_px": 14.0
+    },
+    "icon": {
+      "path": "fonts/fa-6-solid-900.otf",
+      "size_px": 14.0
+    }
+  }
+}

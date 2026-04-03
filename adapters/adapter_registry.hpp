@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-namespace Adapters {
+namespace datagrid::adapters {
 
 using MakeAdapterFn = DataSourcePtr (*)();
 
@@ -34,17 +34,14 @@ class AdapterRegistry
 
     [[nodiscard]] static int Count() noexcept;
 
-  private:
     AdapterRegistry() = delete;
+  private:
     static std::vector<AdapterEntry>& Table() noexcept;
 };
 
 // Declare one namespace-scope static per adapter .cpp to register it with
 // AdapterRegistry before main() runs:
-//
-//   namespace {
-//       const Adapters::RegisterAdapter<MyAdapter> kReg{ "myadapter" };
-//   }
+//   RegisterAdapter<MyAdapter> kReg{ "myadapter" };
 //
 // The non-capturing lambda converts to a raw function pointer via the unary
 // `+` operator — zero heap allocation, zero std::function overhead.
@@ -62,4 +59,4 @@ struct RegisterAdapter
     RegisterAdapter& operator=(const RegisterAdapter&) = delete;
 };
 
-} // namespace Adapters
+} // namespace datagrid::adapters

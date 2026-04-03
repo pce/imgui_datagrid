@@ -1,5 +1,5 @@
 #pragma once
-#include "data_source.hpp"
+#include "../data_source.hpp"
 
 #include <any>
 #include <concepts>
@@ -10,7 +10,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace Adapters {
+namespace datagrid::adapters {
 
 /// Adapter-agnostic representation of a scalar value type used in UDF
 /// signatures.  Intentionally minimal; extend as needed.
@@ -217,4 +217,4 @@ class IUDFProvider
     }
 };
 
-} // namespace Adapters
+} // namespace datagrid::adapters

@@ -4,7 +4,7 @@
 #include <memory>
 #include <string>
 
-namespace Adapters {
+namespace datagrid::adapters {
 
 class SQLiteAdapter final : public IDataSource
 {
@@ -51,4 +51,4 @@ class SQLiteAdapter final : public IDataSource
     std::unique_ptr<Impl> pImpl_;
 };
 
-} // namespace Adapters
+} // namespace datagrid::adapters

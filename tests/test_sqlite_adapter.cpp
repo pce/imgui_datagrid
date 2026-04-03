@@ -3,11 +3,13 @@
 #include "adapters/data_source.hpp"
 #include "adapters/sqlite/sqlite_adapter.hpp"
 
+using namespace datagrid::adapters;
+
 // Creates a connected in-memory SQLiteAdapter and seeds it with a simple table.
-static Adapters::SQLiteAdapter MakeSeededAdapter()
+static SQLiteAdapter MakeSeededAdapter()
 {
-    Adapters::SQLiteAdapter    adapter;
-    Adapters::ConnectionParams p;
+    SQLiteAdapter    adapter;
+    ConnectionParams p;
     p.connectionString = ":memory:";
 
     REQUIRE(adapter.Connect(p).has_value());
@@ -30,8 +32,8 @@ static Adapters::SQLiteAdapter MakeSeededAdapter()
 
 TEST_CASE("SQLiteAdapter: connect to in-memory DB", "[sqlite]")
 {
-    Adapters::SQLiteAdapter    adapter;
-    Adapters::ConnectionParams p;
+    SQLiteAdapter    adapter;
+    ConnectionParams p;
     p.connectionString = ":memory:";
 
     REQUIRE(adapter.Connect(p).has_value());
@@ -41,8 +43,8 @@ TEST_CASE("SQLiteAdapter: connect to in-memory DB", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: connect to non-existent path fails gracefully", "[sqlite]")
 {
-    Adapters::SQLiteAdapter    adapter;
-    Adapters::ConnectionParams p;
+    SQLiteAdapter    adapter;
+    ConnectionParams p;
     p.connectionString = "/no/such/directory/missing.db";
     p.readOnly         = true; // OPEN_READONLY on a missing file must fail
 
@@ -53,8 +55,8 @@ TEST_CASE("SQLiteAdapter: connect to non-existent path fails gracefully", "[sqli
 
 TEST_CASE("SQLiteAdapter: disconnect clears connection", "[sqlite]")
 {
-    Adapters::SQLiteAdapter    adapter;
-    Adapters::ConnectionParams p;
+    SQLiteAdapter    adapter;
+    ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -64,8 +66,8 @@ TEST_CASE("SQLiteAdapter: disconnect clears connection", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: re-connect is safe", "[sqlite]")
 {
-    Adapters::SQLiteAdapter    adapter;
-    Adapters::ConnectionParams p;
+    SQLiteAdapter    adapter;
+    ConnectionParams p;
     p.connectionString = ":memory:";
 
     REQUIRE(adapter.Connect(p).has_value());
@@ -75,8 +77,8 @@ TEST_CASE("SQLiteAdapter: re-connect is safe", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: AdapterLabel contains SQLite version", "[sqlite]")
 {
-    Adapters::SQLiteAdapter    adapter;
-    Adapters::ConnectionParams p;
+    SQLiteAdapter    adapter;
+    ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -88,27 +90,27 @@ TEST_CASE("SQLiteAdapter: AdapterLabel contains SQLite version", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: AdapterLabel when disconnected", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    SQLiteAdapter adapter;
     const std::string       label = adapter.AdapterLabel();
     CHECK_FALSE(label.empty()); // should return a safe fallback string
 }
 
 TEST_CASE("SQLiteAdapter: AdapterName is 'sqlite'", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    SQLiteAdapter adapter;
     CHECK(adapter.AdapterName() == "sqlite");
 }
 
 TEST_CASE("SQLiteAdapter: AdapterVersion is non-empty", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter;
+    SQLiteAdapter adapter;
     CHECK_FALSE(adapter.AdapterVersion().empty());
 }
 
 TEST_CASE("SQLiteAdapter: GetCatalogs returns the connection path", "[sqlite]")
 {
-    Adapters::SQLiteAdapter    adapter;
-    Adapters::ConnectionParams p;
+    SQLiteAdapter    adapter;
+    ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -119,8 +121,8 @@ TEST_CASE("SQLiteAdapter: GetCatalogs returns the connection path", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: GetTables on empty DB returns no user tables", "[sqlite]")
 {
-    Adapters::SQLiteAdapter    adapter;
-    Adapters::ConnectionParams p;
+    SQLiteAdapter    adapter;
+    ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -130,8 +132,8 @@ TEST_CASE("SQLiteAdapter: GetTables on empty DB returns no user tables", "[sqlit
 
 TEST_CASE("SQLiteAdapter: GetTables reflects created tables", "[sqlite]")
 {
-    Adapters::SQLiteAdapter    adapter;
-    Adapters::ConnectionParams p;
+    SQLiteAdapter    adapter;
+    ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -156,8 +158,8 @@ TEST_CASE("SQLiteAdapter: GetTables reflects created tables", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: GetTables excludes sqlite_ system tables", "[sqlite]")
 {
-    Adapters::SQLiteAdapter    adapter;
-    Adapters::ConnectionParams p;
+    SQLiteAdapter    adapter;
+    ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -170,8 +172,8 @@ TEST_CASE("SQLiteAdapter: GetTables excludes sqlite_ system tables", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: GetTables surfaces views", "[sqlite]")
 {
-    Adapters::SQLiteAdapter    adapter;
-    Adapters::ConnectionParams p;
+    SQLiteAdapter    adapter;
+    ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -226,7 +228,7 @@ TEST_CASE("SQLiteAdapter: ExecuteQuery returns all rows", "[sqlite]")
 {
     auto adapter = MakeSeededAdapter();
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table    = "people";
     q.pageSize = 100;
 
@@ -240,7 +242,7 @@ TEST_CASE("SQLiteAdapter: ExecuteQuery result columns match schema", "[sqlite]")
 {
     auto adapter = MakeSeededAdapter();
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table    = "people";
     q.pageSize = 100;
 
@@ -258,7 +260,7 @@ TEST_CASE("SQLiteAdapter: ExecuteQuery result values are correct strings", "[sql
 {
     auto adapter = MakeSeededAdapter();
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table         = "people";
     q.pageSize      = 100;
     q.sortColumn    = "id";
@@ -277,7 +279,7 @@ TEST_CASE("SQLiteAdapter: pagination page 0", "[sqlite]")
 {
     auto adapter = MakeSeededAdapter();
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table         = "people";
     q.pageSize      = 2;
     q.page          = 0;
@@ -295,7 +297,7 @@ TEST_CASE("SQLiteAdapter: pagination page 1", "[sqlite]")
 {
     auto adapter = MakeSeededAdapter();
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table         = "people";
     q.pageSize      = 2;
     q.page          = 1;
@@ -313,7 +315,7 @@ TEST_CASE("SQLiteAdapter: last page may be partial", "[sqlite]")
 {
     auto adapter = MakeSeededAdapter();
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table    = "people";
     q.pageSize = 3;
     q.page     = 1; // rows 4–5
@@ -327,7 +329,7 @@ TEST_CASE("SQLiteAdapter: page beyond end returns empty rows", "[sqlite]")
 {
     auto adapter = MakeSeededAdapter();
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table    = "people";
     q.pageSize = 5;
     q.page     = 99;
@@ -341,7 +343,7 @@ TEST_CASE("SQLiteAdapter: sort ascending by name", "[sqlite]")
 {
     auto adapter = MakeSeededAdapter();
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table         = "people";
     q.pageSize      = 100;
     q.sortColumn    = "name";
@@ -360,7 +362,7 @@ TEST_CASE("SQLiteAdapter: sort descending by age", "[sqlite]")
 {
     auto adapter = MakeSeededAdapter();
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table         = "people";
     q.pageSize      = 100;
     q.sortColumn    = "age";
@@ -378,7 +380,7 @@ TEST_CASE("SQLiteAdapter: whereExact filter", "[sqlite]")
 {
     auto adapter = MakeSeededAdapter();
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table              = "people";
     q.pageSize           = 100;
     q.whereExact["name"] = "Alice";
@@ -393,7 +395,7 @@ TEST_CASE("SQLiteAdapter: whereExact no match returns empty", "[sqlite]")
 {
     auto adapter = MakeSeededAdapter();
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table              = "people";
     q.pageSize           = 100;
     q.whereExact["name"] = "Zaphod";
@@ -407,7 +409,7 @@ TEST_CASE("SQLiteAdapter: searchColumn/searchValue LIKE filter", "[sqlite]")
 {
     auto adapter = MakeSeededAdapter();
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table        = "people";
     q.pageSize     = 100;
     q.searchColumn = "name";
@@ -423,7 +425,7 @@ TEST_CASE("SQLiteAdapter: CountQuery returns total rows", "[sqlite]")
 {
     auto adapter = MakeSeededAdapter();
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table = "people";
     CHECK(adapter.CountQuery(q) == 5);
 }
@@ -435,7 +437,7 @@ TEST_CASE("SQLiteAdapter: CountQuery respects whereExact filter", "[sqlite]")
     // Insert a second Alice to test count
     adapter.Execute("INSERT INTO people VALUES (6, 'Alice', 40, 70.0)");
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table              = "people";
     q.whereExact["name"] = "Alice";
 
@@ -444,14 +446,14 @@ TEST_CASE("SQLiteAdapter: CountQuery respects whereExact filter", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: CountQuery on empty table is 0", "[sqlite]")
 {
-    Adapters::SQLiteAdapter    adapter;
-    Adapters::ConnectionParams p;
+    SQLiteAdapter    adapter;
+    ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
 
     adapter.Execute("CREATE TABLE empty_t (x INTEGER)");
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table = "empty_t";
     CHECK(adapter.CountQuery(q) == 0);
 }
@@ -471,8 +473,8 @@ TEST_CASE("SQLiteAdapter: Execute SELECT returns rows", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: Execute CREATE TABLE returns ok with 0 rows", "[sqlite]")
 {
-    Adapters::SQLiteAdapter    adapter;
-    Adapters::ConnectionParams p;
+    SQLiteAdapter    adapter;
+    ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -483,8 +485,8 @@ TEST_CASE("SQLiteAdapter: Execute CREATE TABLE returns ok with 0 rows", "[sqlite
 
 TEST_CASE("SQLiteAdapter: Execute INSERT reflects rowsAffected", "[sqlite]")
 {
-    Adapters::SQLiteAdapter    adapter;
-    Adapters::ConnectionParams p;
+    SQLiteAdapter    adapter;
+    ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -496,8 +498,8 @@ TEST_CASE("SQLiteAdapter: Execute INSERT reflects rowsAffected", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: Execute invalid SQL returns error result", "[sqlite]")
 {
-    Adapters::SQLiteAdapter    adapter;
-    Adapters::ConnectionParams p;
+    SQLiteAdapter    adapter;
+    ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -508,15 +510,15 @@ TEST_CASE("SQLiteAdapter: Execute invalid SQL returns error result", "[sqlite]")
 
 TEST_CASE("SQLiteAdapter: Execute on disconnected adapter returns error", "[sqlite]")
 {
-    Adapters::SQLiteAdapter adapter; // never connected
+    SQLiteAdapter adapter; // never connected
     const auto              result = adapter.Execute("SELECT 1");
     CHECK_FALSE(result.ok());
 }
 
 TEST_CASE("SQLiteAdapter: NULL column values become empty strings", "[sqlite]")
 {
-    Adapters::SQLiteAdapter    adapter;
-    Adapters::ConnectionParams p;
+    SQLiteAdapter    adapter;
+    ConnectionParams p;
     p.connectionString = ":memory:";
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -524,7 +526,7 @@ TEST_CASE("SQLiteAdapter: NULL column values become empty strings", "[sqlite]")
     adapter.Execute("INSERT INTO nullable_t VALUES (1, NULL)");
     adapter.Execute("INSERT INTO nullable_t VALUES (2, 'present')");
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table         = "nullable_t";
     q.pageSize      = 100;
     q.sortColumn    = "id";

@@ -3,7 +3,7 @@
 #include "imgui.h"
 
 
-namespace UI {
+namespace datagrid::ui {
 
 enum class LayoutMode
 {

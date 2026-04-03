@@ -5,21 +5,23 @@ set(APP_SOURCES
     main.cpp
     app.cpp
     data_browser.cpp
-    theme.cpp
-    utils.cpp
-    inspector/schema_inspector.cpp
+    settings.cpp
+        ui/theme.cpp
+        inspector/schema_inspector.cpp
     sokol_impl.cpp
-    image_cache.cpp
+        io/image_cache.cpp
     stb_impl.cpp
     ui/drag_drop_dialog.cpp
     ui/hex_view.cpp
     ui/sql_editor.cpp
     ui/text_area.cpp
+    ui/theme_customizer.cpp
     # Headers listed for IDE visibility:
     ui/drag_drop_dialog.hpp
     ui/hex_view.hpp
     ui/sql_editor.hpp
     ui/text_area.hpp
+    ui/theme_customizer.hpp
     ui/filetype_sniffer.hpp
 )
 

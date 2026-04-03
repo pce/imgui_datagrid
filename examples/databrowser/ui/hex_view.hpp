@@ -1,5 +1,6 @@
 #pragma once
 
+#include "imgui.h"
 #include <cstddef>
 #include <filesystem>
 #include <span>
@@ -7,7 +8,7 @@
 #include <string_view>
 #include <vector>
 
-namespace UI {
+namespace datagrid::ui {
 
 /// How bytes are visualised in the dialog.
 enum class HexViewMode {
@@ -49,6 +50,10 @@ class HexViewDialog
 
     [[nodiscard]] bool IsOpen() const noexcept { return open_; }
 
+    /// Set the monospace font used for the hex / text dump.
+    /// Pass nullptr to use the ImGui default font (usually also mono).
+    void SetFont(ImFont* f) noexcept { font_ = f; }
+
   private:
     void Reanalyse();
     void RenderStandard();   ///< Classic text-line hex + ASCII
@@ -60,6 +65,7 @@ class HexViewDialog
 
     bool                    open_         = false;
     bool                    pending_open_ = false;
+    ImFont*                 font_         = nullptr; ///< monospace font for hex dump; nullptr = ImGui default
     std::string             label_;
     std::vector<std::byte>  data_;
     std::size_t             fullSize_ = 0;
@@ -69,5 +75,5 @@ class HexViewDialog
     std::vector<StringRun>  runs_;     ///< pre-computed for Inspector mode
 };
 
-} // namespace UI
+} // namespace datagrid::ui
 

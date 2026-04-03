@@ -15,10 +15,10 @@
 #include <vector>
 
 namespace {
-const Adapters::RegisterAdapter<Adapters::DuckDBAdapter> kDuckDBReg{"duckdb"};
+const datagrid::adapters::RegisterAdapter<datagrid::adapters::DuckDBAdapter> kDuckDBReg{"duckdb"};
 }
 
-namespace Adapters {
+namespace datagrid::adapters {
 
 // Constrains ToQueryResult() to any DuckDB result type that exposes the
 // minimal surface we need (MaterializedQueryResult satisfies this).
@@ -495,7 +495,7 @@ std::expected<void, Error> DuckDBAdapter::UpdateRow(const std::string&          
         return {};
 
     return require_writable()
-        .and_then([&] { return Utils::require(!pkValues.empty(), Error{"No primary key supplied"}); })
+        .and_then([&] { return require(!pkValues.empty(), Error{"No primary key supplied"}); })
         .and_then([&]() -> std::expected<void, Error> {
             std::vector<std::string> binds;
             binds.reserve(newValues.size() + pkValues.size());
@@ -541,7 +541,7 @@ std::expected<void, Error> DuckDBAdapter::InsertRow(const std::string&          
                                                     const std::unordered_map<std::string, std::string>& values)
 {
     return require_writable()
-        .and_then([&] { return Utils::require(!values.empty(), Error{"No column values supplied"}); })
+        .and_then([&] { return require(!values.empty(), Error{"No column values supplied"}); })
         .and_then([&]() -> std::expected<void, Error> {
             std::vector<std::string> binds;
             binds.reserve(values.size());
@@ -582,7 +582,7 @@ std::expected<void, Error> DuckDBAdapter::DeleteRow(const std::string&          
                                                     const std::unordered_map<std::string, std::string>& pkValues)
 {
     return require_writable()
-        .and_then([&] { return Utils::require(!pkValues.empty(), Error{"No primary key values supplied"}); })
+        .and_then([&] { return require(!pkValues.empty(), Error{"No primary key values supplied"}); })
         .and_then([&]() -> std::expected<void, Error> {
             std::vector<std::string> binds;
             binds.reserve(pkValues.size());
@@ -765,9 +765,9 @@ template<typename T>
 
 /// Build a runtime duckdb::LogicalType from a ScalarType tag via
 /// VisitScalarType + DuckLogicalType<T>().
-[[nodiscard]] duckdb::LogicalType DuckLogicalTypeOf(Adapters::ScalarType t)
+[[nodiscard]] duckdb::LogicalType DuckLogicalTypeOf(ScalarType t)
 {
-    return Adapters::VisitScalarType(t, []<typename T>(std::type_identity<T>) { return DuckLogicalType<T>(); });
+    return VisitScalarType(t, []<typename T>(std::type_identity<T>) { return DuckLogicalType<T>(); });
 }
 
 /// Extract a value of type T from a DuckDB UnifiedVectorFormat at
@@ -906,7 +906,6 @@ template<typename R, typename A1, typename A2, typename A3>
 
 std::expected<void, Error> DuckDBAdapter::RegisterScalarImpl(ScalarUDFDesc desc)
 {
-    using Utils::require;
     return require(IsConnected(), Error{"Not connected"}).and_then([&]() -> std::expected<void, Error> {
         try {
             const auto arity = desc.argTypes.size();
@@ -1013,7 +1012,6 @@ std::expected<void, Error> DuckDBAdapter::RegisterVectorizedImpl(std::string_vie
                                                                  std::vector<ScalarType>   argTypes,
                                                                  ScalarType                returnType)
 {
-    using Utils::require;
     return require(IsConnected(), Error{"Not connected"}).and_then([&]() -> std::expected<void, Error> {
         try {
             std::vector<duckdb::LogicalType> duckArgs;
@@ -1031,4 +1029,4 @@ std::expected<void, Error> DuckDBAdapter::RegisterVectorizedImpl(std::string_vie
     });
 }
 
-} // namespace Adapters
+} // namespace datagrid::adapters

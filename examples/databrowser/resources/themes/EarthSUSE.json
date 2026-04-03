@@ -1,0 +1,75 @@
+{
+  "id": "EarthSUSE",
+  "title": "Earth / SUSE",
+  "dark": false,
+  "palette": {
+    "bg0": [
+      0.137,
+      0.11,
+      0.075,
+      1.0
+    ],
+    "bg1": [
+      0.204,
+      0.165,
+      0.11,
+      1.0
+    ],
+    "bg2": [
+      0.278,
+      0.224,
+      0.153,
+      1.0
+    ],
+    "fg0": [
+      0.929,
+      0.91,
+      0.851,
+      1.0
+    ],
+    "fg1": [
+      0.741,
+      0.69,
+      0.627,
+      1.0
+    ],
+    "brd": [
+      0.353,
+      0.294,
+      0.212,
+      1.0
+    ],
+    "acc": [
+      0.188,
+      0.729,
+      0.471,
+      1.0
+    ],
+    "acc2": [
+      0.102,
+      0.361,
+      0.239,
+      1.0
+    ]
+  },
+  "style": {
+    "rounding": 5.0,
+    "item_spacing": 8.0,
+    "frame_padding": 6.0,
+    "font_scale": 1.0
+  },
+  "font": {
+    "main": {
+      "path": "fonts/SUSE-Light.ttf",
+      "size_px": 15.0
+    },
+    "mono": {
+      "path": "fonts/SUSEMono-Light.ttf",
+      "size_px": 14.0
+    },
+    "icon": {
+      "path": "fonts/fa-6-solid-900.otf",
+      "size_px": 14.0
+    }
+  }
+}

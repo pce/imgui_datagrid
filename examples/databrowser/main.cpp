@@ -19,9 +19,11 @@
 
 namespace {
 
-std::filesystem::path ExeDir()
+    namespace fs                = std::filesystem;
+
+
+fs::path ExeDir()
 {
-    namespace fs = std::filesystem;
 #if defined(__APPLE__)
     char     buf[PATH_MAX] = {};
     uint32_t sz            = static_cast<uint32_t>(sizeof(buf));
@@ -44,7 +46,6 @@ std::filesystem::path ExeDir()
 
 void SetResourceDirAsCwd()
 {
-    namespace fs                = std::filesystem;
     const fs::path exeResources = ExeDir() / "resources";
     if (fs::is_directory(exeResources)) {
         fs::current_path(ExeDir());
@@ -59,24 +60,24 @@ std::string DetectAdapter(const std::filesystem::path& p)
 {
     std::error_code ec;
     if (std::filesystem::is_directory(p, ec))
-        return std::string{Adapters::name_of(Adapters::AdapterKind::Filesystem)};
+        return std::string{datagrid::adapters::name_of(datagrid::adapters::AdapterKind::Filesystem)};
     const auto ext = p.extension().string();
     if (ext == ".csv")
-        return std::string{Adapters::name_of(Adapters::AdapterKind::CSV)};
+        return std::string{datagrid::adapters::name_of(datagrid::adapters::AdapterKind::CSV)};
     if (ext == ".duckdb")
-        return std::string{Adapters::name_of(Adapters::AdapterKind::DuckDB)};
-    return std::string{Adapters::name_of(Adapters::AdapterKind::SQLite)};
+        return std::string{datagrid::adapters::name_of(datagrid::adapters::AdapterKind::DuckDB)};
+    return std::string{datagrid::adapters::name_of(datagrid::adapters::AdapterKind::SQLite)};
 }
 
 // Sokol requires C-function callbacks; wrap app state so we can reach it
 // via sapp_userdata() without file-scope globals.
 struct AppState
 {
-    App         app;
+    datagrid::App         app;
     std::string windowTitle;
 };
 
-App& GetApp()
+datagrid::App& GetApp()
 {
     return static_cast<AppState*>(sapp_userdata())->app;
 }

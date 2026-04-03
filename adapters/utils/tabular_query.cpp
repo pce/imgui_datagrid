@@ -22,7 +22,7 @@
 #define TQ_HAVE_AVX2 1
 #endif
 
-namespace Adapters::Query {
+namespace datagrid::adapters {
 
 namespace {
 
@@ -918,12 +918,12 @@ QueryResult TabularQuery::execute(const QueryPlan& plan, const TabularSoA& soa, 
             const bool isNum = soa.colTypes[sortCI] == ColType::Numeric && !soa.numCols[sortCI].empty();
             if (isNum) {
                 const auto& nc = soa.numCols[sortCI];
-                std::stable_sort(survivors.begin(), survivors.end(), [&](size_t a, size_t b) {
+                std::ranges::stable_sort(survivors, [&](size_t a, size_t b) {
                     return asc ? nc[a] < nc[b] : nc[a] > nc[b];
                 });
             } else {
                 const auto& sc = soa.strCols[sortCI];
-                std::stable_sort(survivors.begin(), survivors.end(), [&](size_t a, size_t b) {
+                std::ranges::stable_sort(survivors, [&](size_t a, size_t b) {
                     return asc ? sc[a] < sc[b] : sc[a] > sc[b];
                 });
             }
@@ -1001,4 +1001,4 @@ QueryResult TabularQuery::execute(const QueryPlan& plan, const TabularSoA& soa, 
     return result;
 }
 
-} // namespace Adapters::Query
+} // namespace datagrid::adapters

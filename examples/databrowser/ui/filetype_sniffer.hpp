@@ -9,9 +9,9 @@
 #include <string>
 #include <string_view>
 
-#include "platform.hpp"
+#include "../io/platform.hpp"
 
-namespace UI {
+namespace datagrid::ui {
 
 struct SniffResult
 {
@@ -132,13 +132,8 @@ inline std::string detect_language(std::span<const std::byte> sample) noexcept
     constexpr std::size_t kMax = 512;
     std::array<std::byte, kMax> buf;
 
-    std::FILE* raw = nullptr;
-    if constexpr (UI::Platform::isWindows)
-        raw = ::_wfopen(path.c_str(), L"rb");
-    else
-        raw = std::fopen(path.c_str(), "rb");
-    if (!raw) return {};
-    std::unique_ptr<std::FILE, decltype(&std::fclose)> f(raw, &std::fclose);
+    auto f = io::OpenBinaryFile(path);
+    if (!f) return {};
 
     const std::size_t n = std::fread(buf.data(), 1, buf.size(), f.get());
     if (n == 0 || std::ferror(f.get())) return {};
@@ -172,14 +167,9 @@ inline std::string lower_ext(const std::filesystem::path& p) noexcept {
     if (e == ".db" || e == ".sqlite" || e == ".sqlite3" || e == ".db3") return true;
     // Magic: "SQLite format 3\0"
     char magic[15] = {};
-    std::FILE* f = nullptr;
-    if constexpr (UI::Platform::isWindows)
-        f = ::_wfopen(p.c_str(), L"rb");
-    else
-        f = std::fopen(p.c_str(), "rb");
+    auto f = io::OpenBinaryFile(p);
     if (!f) return false;
-    const auto n = std::fread(magic, 1, 15, f);
-    std::fclose(f);
+    const auto n = std::fread(magic, 1, 15, f.get());
     return n == 15 && std::string_view{magic, 15} == "SQLite format 3";
 }
 
@@ -187,15 +177,15 @@ inline std::string lower_ext(const std::filesystem::path& p) noexcept {
 {
     if (detail::lower_ext(p) == ".pdf") return true;
     char magic[4] = {};
-    std::FILE* f = nullptr;
-    if constexpr (UI::Platform::isWindows)
-        f = ::_wfopen(p.c_str(), L"rb");
-    else
-        f = std::fopen(p.c_str(), "rb");
+    auto f = io::OpenBinaryFile(p);
     if (!f) return false;
-    const auto n = std::fread(magic, 1, 4, f);
-    std::fclose(f);
+    const auto n = std::fread(magic, 1, 4, f.get());
     return n == 4 && magic[0]=='%' && magic[1]=='P' && magic[2]=='D' && magic[3]=='F';
+}
+
+[[nodiscard]] inline bool IsTextFile(const std::filesystem::path& p) noexcept {
+    SniffResult r = sniff_file(p);
+    return r.is_text;
 }
 
 /// True when the path represents something the OS should launch.
@@ -209,13 +199,13 @@ inline std::string lower_ext(const std::filesystem::path& p) noexcept {
     namespace fs = std::filesystem;
     std::error_code ec;
 
-    if constexpr (UI::Platform::isWindows) {
+    if constexpr (io::Platform::isWindows) {
         const std::string ext = detail::lower_ext(p);
         for (auto sv : {".exe", ".com", ".bat", ".cmd", ".ps1", ".msi"})
             if (ext == sv) return true;
         return false;
     } else {
-        if constexpr (UI::Platform::isMacOS) {
+        if constexpr (io::Platform::isMacOS) {
             // .app bundles are launchable directory packages on macOS.
             if (p.extension() == ".app") {
                 const auto st = fs::status(p, ec);
@@ -229,23 +219,5 @@ inline std::string lower_ext(const std::filesystem::path& p) noexcept {
     }
 }
 
-/// True when the extension belongs to a well-known text/source-code format.
-/// Use together with sniff_file() to also detect unlabelled text files.
-[[nodiscard]] inline bool IsTextExtension(const std::filesystem::path& p) noexcept
-{
-    const std::string e = detail::lower_ext(p);
-    for (auto sv : {
-        ".txt",".md",".rst",".log",".csv",".tsv",
-        ".json",".xml",".yaml",".yml",".toml",".ini",".cfg",".conf",
-        ".py",".pyw",".js",".ts",".jsx",".tsx",".rb",".php",".pl",".pm",
-        ".sh",".bash",".zsh",".fish",".lua",".sql",".r",
-        ".cpp",".cxx",".cc",".c",".h",".hpp",".hxx",".inl",
-        ".rs",".go",".swift",".kt",".java",".cs",".scala",".zig",
-        ".cmake",".msl",".glsl",".hlsl",".wgsl",
-        ".css",".html",".htm",".svg",".tex",
-    }) if (e == sv) return true;
-    return false;
-}
-
-} // namespace UI
+} // namespace datagrid::ui
 

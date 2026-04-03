@@ -1,24 +1,24 @@
 #include "filesystem_adapter.hpp"
 #include "../adapter_registry.hpp"
-#include "../platform_detect.hpp"
+#include "../../platform.hpp"
 #include "fluent_query.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <ctime>
 #include <cstdio>
 #include <cstring>
-#include <ctime>
 #include <format>
 #include <sstream>
 #include <system_error>
 
 
 namespace {
-const Adapters::RegisterAdapter<Adapters::FilesystemAdapter> kFilesystemReg{"filesystem"};
+const datagrid::adapters::RegisterAdapter<datagrid::adapters::FilesystemAdapter> kFilesystemReg{"filesystem"};
 }
 
-namespace Adapters {
+namespace datagrid::adapters {
 
 FilesystemAdapter::FilesystemAdapter() = default;
 
@@ -130,7 +130,7 @@ std::vector<TableInfo> FilesystemAdapter::GetTables(const std::string& catalog) 
 
 
 bool FilesystemAdapter::HasCapability(FsCapability capability) const {
-    if constexpr (Platform::isWindows)
+    if constexpr (io::Platform::isWindows)
         return capability == FsCapability::WindowsAttributes;
     else
         return capability == FsCapability::PosixPermissions;
@@ -145,7 +145,7 @@ std::vector<ColumnInfo> FilesystemAdapter::GetColumns(const std::string& /*table
         {"modified", "TEXT", true,  false},
         {"path",     "TEXT", false, false},
     };
-    cols.push_back({std::string{Platform::kPermColName}, "TEXT", true, false});
+    cols.push_back({std::string{io::Platform::kPermColName}, "TEXT", true, false});
     return cols;
 }
 
@@ -226,7 +226,7 @@ std::vector<FilesystemEntry> FilesystemAdapter::EnumerateDir(const fs::path& dir
         const auto status = followSymlinks_ ? fs::status(de.path(), entryEc) : fs::symlink_status(de.path(), entryEc);
 
         // Windows exposes simplified ACL semantics; POSIX has full rwx permissions.
-        if constexpr (Platform::isWindows) {
+        if constexpr (io::Platform::isWindows) {
             const auto p  = status.permissions();
             e.permissions = (p & fs::perms::owner_write) == fs::perms::none ? "r--" : "rw-";
         } else {
@@ -384,7 +384,7 @@ QueryResult FilesystemAdapter::Execute(const std::string& sql) const
     resolved = patchPath(resolved, "FROM .", currentPath_.string());
     resolved = patchPath(resolved, "FROM '.'", currentPath_.string());
 
-    auto q = Fs::FluentQuery::from_sql(resolved);
+    auto q = FluentQuery::from_sql(resolved);
     if (!q) {
         QueryResult r;
         r.error = "SQL parse error: " + q.error();
@@ -519,32 +519,43 @@ std::string FilesystemAdapter::FormatSize(std::uintmax_t bytes, bool isDir)
 std::string FilesystemAdapter::FormatTime(const fs::file_time_type& t)
 {
     using namespace std::chrono;
-    const auto sysTp = time_point_cast<system_clock::duration>(file_clock::to_sys(t));
-    const std::time_t tt = system_clock::to_time_t(sysTp);
-    std::tm tmBuf{};
-    if (!Platform::localtime_safe(&tt, &tmBuf))
-        return "?";
-    return std::format("{:04}-{:02}-{:02} {:02}:{:02}",
-        tmBuf.tm_year + 1900, tmBuf.tm_mon + 1, tmBuf.tm_mday,
-        tmBuf.tm_hour, tmBuf.tm_min);
+    // file_clock duration may use __int128; cast to system_clock precision first.
+    const auto sys_tp = time_point_cast<system_clock::duration>(file_clock::to_sys(t));
+    const std::time_t tt = system_clock::to_time_t(sys_tp);
+    std::tm local{};
+#ifdef _WIN32
+    ::localtime_s(&local, &tt); // thread-safe (Windows)
+#else
+    ::localtime_r(&tt, &local); // thread-safe (POSIX)
+#endif
+    char buf[20];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &local);
+    return buf;
 }
 
 std::string FilesystemAdapter::FormatPerms(fs::perms p)
 {
-    using P  = fs::perms;
-    auto bit = [&](fs::perms mask, char ch) -> char { return (p & mask) != P::none ? ch : '-'; };
-    char s[10];
-    s[0] = bit(P::owner_read, 'r');
-    s[1] = bit(P::owner_write, 'w');
-    s[2] = bit(P::owner_exec, 'x');
-    s[3] = bit(P::group_read, 'r');
-    s[4] = bit(P::group_write, 'w');
-    s[5] = bit(P::group_exec, 'x');
-    s[6] = bit(P::others_read, 'r');
-    s[7] = bit(P::others_write, 'w');
-    s[8] = bit(P::others_exec, 'x');
-    s[9] = '\0';
-    return s;
+    using P = fs::perms;
+    if constexpr (io::Platform::isWindows) {
+        const bool r = (p & P::owner_read)  != P::none;
+        const bool w = (p & P::owner_write) != P::none;
+        char s[4] = {r ? 'r' : '-', w ? 'w' : '-', '-', '\0'};
+        return s;
+    } else {
+        auto bit = [&](P mask, char ch) -> char { return (p & mask) != P::none ? ch : '-'; };
+        char s[10];
+        s[0] = bit(P::owner_read,   'r');
+        s[1] = bit(P::owner_write,  'w');
+        s[2] = bit(P::owner_exec,   'x');
+        s[3] = bit(P::group_read,   'r');
+        s[4] = bit(P::group_write,  'w');
+        s[5] = bit(P::group_exec,   'x');
+        s[6] = bit(P::others_read,  'r');
+        s[7] = bit(P::others_write, 'w');
+        s[8] = bit(P::others_exec,  'x');
+        s[9] = '\0';
+        return s;
+    }
 }
 
 std::vector<std::string> FilesystemAdapter::EntryToRow(const FilesystemEntry& e)
@@ -554,14 +565,14 @@ std::vector<std::string> FilesystemAdapter::EntryToRow(const FilesystemEntry& e)
         e.kind,
         e.sizeStr,
         e.modified,
-        e.permissions,
         e.path,
+        e.permissions,
     };
 }
 
 fs::path FilesystemAdapter::HomeDir()
 {
-    if constexpr (Platform::isWindows) {
+    if constexpr (io::Platform::isWindows) {
         // USERPROFILE is set by Windows for every user session.
         const char* home = std::getenv("USERPROFILE");
         if (home) {
@@ -595,7 +606,7 @@ fs::path FilesystemAdapter::HomeDir()
 
 fs::path FilesystemAdapter::RootDir()
 {
-    if constexpr (Platform::isWindows) {
+    if constexpr (io::Platform::isWindows) {
         std::error_code ec;
         const auto root = fs::current_path(ec).root_path();
         return ec ? fs::path("C:\\") : root;
@@ -604,4 +615,4 @@ fs::path FilesystemAdapter::RootDir()
     }
 }
 
-} // namespace Adapters
+} // namespace datagrid::adapters

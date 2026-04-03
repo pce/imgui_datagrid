@@ -12,8 +12,8 @@
 #include <string>
 
 namespace fs = std::filesystem;
-using namespace Adapters::Fs;
-using namespace Adapters::Fs::literals;
+using namespace datagrid::adapters;
+using namespace datagrid::adapters::literals;
 
 //
 // Creates:
@@ -58,7 +58,7 @@ struct TempDir
     }
 };
 
-static bool hasName(const std::vector<Adapters::FilesystemEntry>& v, const std::string& name)
+static bool hasName(const std::vector<FilesystemEntry>& v, const std::string& name)
 {
     for (const auto& e : v)
         if (e.name == name)

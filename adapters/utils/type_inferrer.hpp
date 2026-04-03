@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 
-namespace TypeInfer {
+namespace datagrid::adapters::utils {
 
 enum class InferredType
 {
@@ -56,4 +56,4 @@ struct HeaderResult
 [[nodiscard]] HeaderResult DetectHeader(const std::vector<std::string>& firstRow,
                                         const std::vector<std::string>& secondRow);
 
-} // namespace TypeInfer
+} // namespace datagrid::adapters::utils

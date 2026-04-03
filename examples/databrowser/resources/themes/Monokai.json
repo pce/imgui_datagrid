@@ -1,0 +1,75 @@
+{
+  "id": "Monokai",
+  "title": "Monokai",
+  "dark": true,
+  "palette": {
+    "bg0": [
+      0.1,
+      0.1,
+      0.1,
+      1.0
+    ],
+    "bg1": [
+      0.16,
+      0.16,
+      0.16,
+      1.0
+    ],
+    "bg2": [
+      0.22,
+      0.22,
+      0.22,
+      1.0
+    ],
+    "fg0": [
+      0.9,
+      0.9,
+      0.9,
+      1.0
+    ],
+    "fg1": [
+      0.5,
+      0.5,
+      0.5,
+      1.0
+    ],
+    "brd": [
+      0.22,
+      0.22,
+      0.22,
+      1.0
+    ],
+    "acc": [
+      0.64,
+      0.87,
+      0.29,
+      1.0
+    ],
+    "acc2": [
+      0.44,
+      0.33,
+      0.53,
+      1.0
+    ]
+  },
+  "style": {
+    "rounding": 4.0,
+    "item_spacing": 8.0,
+    "frame_padding": 6.0,
+    "font_scale": 1.0
+  },
+  "font": {
+    "main": {
+      "path": "fonts/Roboto-Medium.ttf",
+      "size_px": 15.0
+    },
+    "mono": {
+      "path": "fonts/JetBrainsMono-Thin.ttf",
+      "size_px": 14.0
+    },
+    "icon": {
+      "path": "fonts/fa-6-solid-900.otf",
+      "size_px": 14.0
+    }
+  }
+}

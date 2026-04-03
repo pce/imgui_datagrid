@@ -1,0 +1,75 @@
+{
+  "id": "MonoLight",
+  "title": "Mono Light",
+  "dark": false,
+  "palette": {
+    "bg0": [
+      0.973,
+      0.973,
+      0.973,
+      1.0
+    ],
+    "bg1": [
+      0.918,
+      0.918,
+      0.918,
+      1.0
+    ],
+    "bg2": [
+      0.878,
+      0.878,
+      0.878,
+      1.0
+    ],
+    "fg0": [
+      0.102,
+      0.102,
+      0.102,
+      1.0
+    ],
+    "fg1": [
+      0.6,
+      0.6,
+      0.6,
+      1.0
+    ],
+    "brd": [
+      0.8,
+      0.8,
+      0.8,
+      1.0
+    ],
+    "acc": [
+      0.29,
+      0.435,
+      0.647,
+      1.0
+    ],
+    "acc2": [
+      0.29,
+      0.435,
+      0.647,
+      1.0
+    ]
+  },
+  "style": {
+    "rounding": 2.0,
+    "item_spacing": 6.0,
+    "frame_padding": 4.0,
+    "font_scale": 1.0
+  },
+  "font": {
+    "main": {
+      "path": "fonts/JetBrainsMono-Thin.ttf",
+      "size_px": 14.0
+    },
+    "mono": {
+      "path": "fonts/JetBrainsMono-Thin.ttf",
+      "size_px": 14.0
+    },
+    "icon": {
+      "path": "fonts/fa-6-solid-900.otf",
+      "size_px": 14.0
+    }
+  }
+}

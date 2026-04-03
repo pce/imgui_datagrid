@@ -14,22 +14,22 @@
 
 namespace fs = std::filesystem;
 
-namespace UI {
+namespace datagrid::ui {
 
-void DropDialogManager::TriggerDbFileOpen(const FilePayload& fp, DataBrowser* target)
+void DropDialogManager::TriggerDbFileOpen(const io::FilePayload& fp, DataBrowser* target)
 {
     filePayload_   = fp;
     target_        = target;
-    sniffedType_   = SniffDbType(fp.path);
+    sniffedType_   = io::SniffDbType(fp.path);
     openNewWindow_ = true;
     crudError_.clear();
     kind_ = Kind::DbFileOpen;
     ImGui::OpenPopup("##dd_dbfile");
 }
 
-void DropDialogManager::TriggerRowInsert(const RowPayload&                 rp,
+void DropDialogManager::TriggerRowInsert(const io::RowPayload&                 rp,
                                          DataBrowser*                      target,
-                                         std::vector<Adapters::ColumnInfo> targetCols,
+                                         std::vector<adapters::ColumnInfo> targetCols,
                                          std::vector<std::string>          srcColNames,
                                          std::vector<std::string>          srcValues)
 {
@@ -66,7 +66,7 @@ void DropDialogManager::TriggerRowInsert(const RowPayload&                 rp,
     ImGui::OpenPopup("##dd_rowinsert");
 }
 
-void DropDialogManager::TriggerFsCopyMove(const FilePayload& fp, std::string dstDir, DataBrowser* target)
+void DropDialogManager::TriggerFsCopyMove(const io::FilePayload& fp, std::string dstDir, DataBrowser* target)
 {
     fsCopyPayload_ = fp;
     fsDstDir_      = std::move(dstDir);
@@ -118,7 +118,7 @@ void DropDialogManager::RenderDbFileOpenDialog()
         return;
     }
 
-    ImGui::TextUnformatted(Icons::Database);
+    ImGui::TextUnformatted(icons::Database);
     ImGui::SameLine(0.0f, 6.0f);
     ImGui::TextUnformatted(filePayload_.name);
     ImGui::TextDisabled("  %s", filePayload_.path);
@@ -126,8 +126,8 @@ void DropDialogManager::RenderDbFileOpenDialog()
     ImGui::Separator();
     ImGui::Spacing();
 
-    const char* typeStr = (sniffedType_ == FileDbType::SQLite)   ? "SQLite database"
-                          : (sniffedType_ == FileDbType::DuckDB) ? "DuckDB database"
+    const char* typeStr = (sniffedType_ == io::FileDbType::SQLite)   ? "SQLite database"
+                          : (sniffedType_ == io::FileDbType::DuckDB) ? "DuckDB database"
                                                                  : "Unknown type";
     ImGui::Text("Detected: %s", typeStr);
     ImGui::Spacing();
@@ -141,7 +141,7 @@ void DropDialogManager::RenderDbFileOpenDialog()
         ImGui::Spacing();
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
         ImGui::TextWrapped("%s  This will close \"%s\" and open the new file in its place.",
-                           Icons::Warning,
+                           icons::Warning,
                            target_->WindowTitle().c_str());
         ImGui::PopStyleColor();
     }
@@ -156,10 +156,10 @@ void DropDialogManager::RenderDbFileOpenDialog()
     }
     ImGui::SameLine();
 
-    const bool canOpen = (sniffedType_ != FileDbType::Unknown);
+    const bool canOpen = (sniffedType_ != io::FileDbType::Unknown);
     ImGui::BeginDisabled(!canOpen);
     if (ImGui::Button("Open", ImVec2(100.0f, 0.0f))) {
-        const std::string adapter = std::string(AdapterForDbType(sniffedType_));
+        const std::string adapter = std::string(io::AdapterForDbType(sniffedType_));
         const std::string path    = filePayload_.path;
         if (openNewWindow_) {
             if (onOpenNewWindow)
@@ -185,7 +185,7 @@ void DropDialogManager::RenderRowInsertDialog()
         return;
     }
 
-    ImGui::TextUnformatted(Icons::Database);
+    ImGui::TextUnformatted(icons::Database);
     ImGui::SameLine(0.0f, 6.0f);
     // U+2192 RIGHTWARDS ARROW encoded as UTF-8: 0xE2 0x86 0x92
     ImGui::Text("Insert / Update Row \xe2\x86\x92 %s", rowPayload_.tableName);
@@ -235,7 +235,7 @@ void DropDialogManager::RenderRowInsertDialog()
 
             ImGui::TableSetColumnIndex(0);
             if (m.isPrimaryKey) {
-                ImGui::TextDisabled("%s", Icons::Lock);
+                ImGui::TextDisabled("%s", icons::Lock);
                 ImGui::SameLine(0.0f, 4.0f);
             }
             ImGui::Text("%s (%s)", m.targetColumn.c_str(), m.typeName.c_str());
@@ -295,7 +295,7 @@ void DropDialogManager::RenderRowInsertDialog()
     if (!crudError_.empty()) {
         ImGui::Spacing();
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
-        ImGui::TextWrapped("%s  %s", Icons::Warning, crudError_.c_str());
+        ImGui::TextWrapped("%s  %s", icons::Warning, crudError_.c_str());
         ImGui::PopStyleColor();
     }
 
@@ -384,7 +384,7 @@ void DropDialogManager::RenderFsCopyMoveDialog()
     }
 
     const bool  isDir   = std::string_view(fsCopyPayload_.kind) == "dir";
-    const char* srcIcon = isDir ? Icons::Folder : Icons::File;
+    const char* srcIcon = isDir ? icons::Folder : icons::File;
 
     ImGui::TextUnformatted(srcIcon);
     ImGui::SameLine(0.0f, 6.0f);
@@ -393,7 +393,7 @@ void DropDialogManager::RenderFsCopyMoveDialog()
 
     ImGui::Spacing();
 
-    ImGui::TextUnformatted(Icons::Folder);
+    ImGui::TextUnformatted(icons::Folder);
     ImGui::SameLine(0.0f, 4.0f);
     ImGui::TextUnformatted("Destination:");
     ImGui::SetNextItemWidth(-1.0f);
@@ -440,14 +440,14 @@ void DropDialogManager::RenderFsCopyMoveDialog()
     if (!crudError_.empty()) {
         ImGui::Spacing();
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
-        ImGui::TextWrapped("%s  %s", Icons::Warning, crudError_.c_str());
+        ImGui::TextWrapped("%s  %s", icons::Warning, crudError_.c_str());
         ImGui::PopStyleColor();
     }
 
     ImGui::EndPopup();
 }
 
-void DropDialogManager::TriggerFileToView(const FilePayload& fp, DataBrowser* target)
+void DropDialogManager::TriggerFileToView(const io::FilePayload& fp, DataBrowser* target)
 {
     kind_              = Kind::FileToView;
     target_            = target;
@@ -522,5 +522,5 @@ void DropDialogManager::RenderFileToViewDialog()
     ImGui::EndPopup();
 }
 
-} // namespace UI
+} // namespace datagrid::ui
 

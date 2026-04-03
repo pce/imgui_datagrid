@@ -1,0 +1,75 @@
+{
+  "id": "DawnBringer16Dark",
+  "title": "DawnBringer 16 \u2014 Dark",
+  "dark": true,
+  "palette": {
+    "bg0": [
+      0.078,
+      0.047,
+      0.11,
+      1.0
+    ],
+    "bg1": [
+      0.267,
+      0.141,
+      0.204,
+      1.0
+    ],
+    "bg2": [
+      0.188,
+      0.204,
+      0.427,
+      1.0
+    ],
+    "fg0": [
+      0.871,
+      0.933,
+      0.839,
+      1.0
+    ],
+    "fg1": [
+      0.459,
+      0.443,
+      0.38,
+      1.0
+    ],
+    "brd": [
+      0.306,
+      0.29,
+      0.306,
+      1.0
+    ],
+    "acc": [
+      0.427,
+      0.761,
+      0.792,
+      1.0
+    ],
+    "acc2": [
+      0.188,
+      0.204,
+      0.427,
+      1.0
+    ]
+  },
+  "style": {
+    "rounding": 0.0,
+    "item_spacing": 10.0,
+    "frame_padding": 8.0,
+    "font_scale": 1.0
+  },
+  "font": {
+    "main": {
+      "path": "fonts/MonaspaceKryptonNF-WideLight.otf",
+      "size_px": 13.0
+    },
+    "mono": {
+      "path": "fonts/MonaspaceKryptonNF-WideLight.otf",
+      "size_px": 13.0
+    },
+    "icon": {
+      "path": "fonts/fa-6-solid-900.otf",
+      "size_px": 14.0
+    }
+  }
+}

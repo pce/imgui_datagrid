@@ -19,11 +19,12 @@
 #include <print>
 #include <ranges>
 
-#include "drag_drop.hpp"
+#include "io/drag_drop.hpp"
 #include "ui/drag_drop_dialog.hpp"
-#include "icons.hpp"
+#include "ui/icons.hpp"
 #include "ui/filetype_sniffer.hpp"
-#include "ui/platform.hpp"
+#include "io/platform.hpp"
+#include "settings.hpp"
 
 #if defined(__APPLE__)
 static constexpr uint32_t kPlatformMod = SAPP_MODIFIER_SUPER;
@@ -31,10 +32,55 @@ static constexpr uint32_t kPlatformMod = SAPP_MODIFIER_SUPER;
 static constexpr uint32_t kPlatformMod = SAPP_MODIFIER_CTRL;
 #endif
 
+namespace datagrid {
 
 void App::Init()
 {
     verbose_ = (std::getenv("DATAGRID_VERBOSE") != nullptr);
+
+    // ── Mount points ──────────────────────────────────────────────────────────
+    //  data/    (resources/) → RO  bundled assets: fonts, shaders, default themes
+    //  config/  (exe-dir/)   → RW  user config: settings.json, theme overrides, .ini
+    //
+    //  More-specific data/ is mounted last so it wins in longest-prefix matching.
+    exeDir_ = Settings::exe_dir();
+
+    //  exeDir_/             RW — user config (settings.json, .ini, theme overrides)
+    //  exeDir_/resources/   RO — bundled read-only assets (fonts, shaders, built-in themes)
+    //  exeDir_/resources/themes/  RW — intentional escalation: user may write theme overrides
+    //                             into the same directory as the built-in themes.
+    //                             force=true because child is RW while parent is RO.
+    auto logMount = [&](io::MountStatus s, const char* label) {
+        if (!verbose_) return;
+        const char* tag = [&] {
+            switch (s) {
+                case io::MountStatus::Mounted:   return "mounted";
+                case io::MountStatus::Updated:   return "updated";
+                case io::MountStatus::Narrowed:  return "narrowed";
+                case io::MountStatus::Escalated: return "escalated";
+                case io::MountStatus::Rejected:  return "REJECTED";
+            }
+            return "?";
+        }();
+        std::println("[RFS] {} {}", tag, label);
+    };
+    logMount(rfs_.mount(exeDir_,                          io::Perms::RW),             "config/");
+    logMount(rfs_.mount(exeDir_ / "resources",            io::Perms::RO),             "data/");
+    logMount(rfs_.mount(exeDir_ / "resources" / "themes", io::Perms::RW, /*force*/true), "data/themes/ (escalated RO→RW)");
+
+    // Load persisted config before anything that depends on activeTheme_
+    // (font loading, theme apply).  Adapter / path preferences are also here.
+    config_      = LoadAppConfig();
+    activeTheme_ = config_.activeTheme;
+
+    // Load theme palettes + fonts: built-in JSON definitions first, then user overrides on top.
+    const auto themesDir = exeDir_ / "resources" / "themes";
+    {
+        const int defs = customizer_.load_builtin_definitions(themesDir, rfs_);
+        const int ovrd = customizer_.load_all(themesDir, rfs_);
+        if (verbose_)
+            std::println("[Themes] {} built-in definitions, {} user overrides loaded", defs, ovrd);
+    }
 
     const sg_desc gfx_desc = {
         .logger      = {.func = slog_func},
@@ -50,114 +96,30 @@ void App::Init()
 
     ImGui::GetIO().IniFilename = "databrowser.ini";
 
-    const float dpi = sapp_dpi_scale();
+    dpi_ = sapp_dpi_scale();
     if (verbose_)
-        std::println("[Init] DPI scale: {:.2f}", dpi);
+        std::println("[Init] DPI scale: {:.2f}", dpi_);
 
     ImGuiIO& io = ImGui::GetIO();
     io.Fonts->Clear();
 
-    // Unicode ranges shared by all UI fonts:
-    // Basic Latin + Latin-1 + em/en dash + Unicode arrows.
-    static const ImWchar kUiRanges[] = {
-        0x0020, 0x00FF, // Basic Latin + Latin-1 Supplement
-        0x2013, 0x2015, // en dash, em dash, horizontal bar
-        0x2190, 0x21FF, // Arrows block  ← ↑ → ↓ …
-        0,
+    // Wire up the theme-changed callback so fonts are lazy-loaded before apply().
+    customizer_.onThemeChanged = [this](ui::ThemeStyle t) {
+        activeTheme_ = t;
+        LoadThemeFonts(t);
     };
 
-    const char* faPath   = "resources/fonts/fa-6-solid-900.otf";
-    const bool  faExists = std::filesystem::exists(faPath);
-    if (verbose_)
-        std::println("[Font] FA6 solid: {}", faExists ? "found" : "MISSING — icons will be blank");
+    // Load the startup theme fonts — must be the FIRST font added (ImGui atlas default).
+    LoadThemeFonts(activeTheme_);
 
-    // Helper: load a UI font then merge FA icons into it.
-    // The first call also serves as the atlas default (fonts[0]).
-    auto loadUiFont = [&](const char* path) -> ImFont* {
-        ImFont* f = io.Fonts->AddFontFromFileTTF(path, 14.0f * dpi, nullptr, kUiRanges);
-        if (!f) {
-            if (verbose_) std::println("[Font] {} MISSING", path);
-            return nullptr;
-        }
-        if (verbose_) std::println("[Font] {}: OK", path);
-        if (faExists) {
-            ImFontConfig cfg;
-            cfg.MergeMode        = true;
-            cfg.PixelSnapH       = true;
-            cfg.GlyphMinAdvanceX = 14.0f * dpi;
-            io.Fonts->AddFontFromFileTTF(faPath, 14.0f * dpi, &cfg, Icons::kFAGlyphRanges);
-        }
-        return f;
-    };
-
-    // Helper: load a code/monospace font (no FA merge needed).
-    auto loadCodeFont = [&](const char* path) -> ImFont* {
-        ImFont* f = io.Fonts->AddFontFromFileTTF(path, 14.0f * dpi);
-        if (verbose_)
-            std::println("[Font] code {}: {}", path, f ? "OK" : "MISSING");
-        return f;
-    };
-
-    // ── UI fonts (one per theme group, FA merged into each) ───────────────────
-    // Roboto must be first — it becomes the atlas default font.
-    ImFont* fRoboto     = loadUiFont("resources/fonts/Roboto-Medium.ttf");
-    ImFont* fSUSE       = loadUiFont("resources/fonts/SUSE-Light.ttf");
-    ImFont* fHackUI     = loadUiFont("resources/fonts/Hack-Regular.ttf");
-    ImFont* fKarla      = loadUiFont("resources/fonts/Karla-Regular.ttf");
-    ImFont* fJetBrains  = loadUiFont("resources/fonts/JetBrainsMono-Thin.ttf");
-
-    if (!fRoboto) {
-        io.Fonts->AddFontDefault();
-        fRoboto = io.Fonts->Fonts[0];
-        if (verbose_) std::println("[Font] Falling back to ImGui built-in default");
-    }
-
-    // ── Code / monospace fonts (no FA) ────────────────────────────────────────
-    ImFont* fHackCode    = loadCodeFont("resources/fonts/Hack-Regular.ttf");
-    ImFont* fSUSEMono    = loadCodeFont("resources/fonts/SUSEMono-Light.ttf");
-    ImFont* fMonaspace   = loadCodeFont("resources/fonts/MonaspaceArgonNF-Regular.otf");
-    ImFont* fMonaKrypton = loadCodeFont("resources/fonts/MonaspaceKryptonNF-WideLight.otf");
-
-    // Graceful fallbacks when a theme-specific font is missing.
-    if (!fSUSEMono)    fSUSEMono    = fHackCode;
-    if (!fMonaspace)   fMonaspace   = fHackCode;
-    if (!fMonaKrypton) fMonaKrypton = fMonaspace;
-    if (!fKarla)       fKarla       = fRoboto;
-    if (!fJetBrains)   fJetBrains   = fRoboto;
-
-    io.FontGlobalScale = (1.0f / dpi);
-
-    // ── Register font pairs with all 16 themes ────────────────────────────────
-    ImFont* const fSUSEui = fSUSE   ? fSUSE   : fRoboto;
-    ImFont* const fHackUi = fHackUI ? fHackUI : fRoboto;
-    theme_.RegisterFonts(ThemeType::SolarizedDark,      fRoboto,     fHackCode);
-    theme_.RegisterFonts(ThemeType::SolarizedLight,     fRoboto,     fHackCode);
-    theme_.RegisterFonts(ThemeType::Monokai,            fRoboto,     fHackCode);
-    theme_.RegisterFonts(ThemeType::MonokaiDark,        fRoboto,     fHackCode);
-    theme_.RegisterFonts(ThemeType::MonaSpaces,         fKarla,      fMonaspace);
-    theme_.RegisterFonts(ThemeType::EarthSUSE,          fSUSEui,     fSUSEMono);
-    theme_.RegisterFonts(ThemeType::EarthSUSEDark,      fSUSEui,     fSUSEMono);
-    theme_.RegisterFonts(ThemeType::NeonSpaces,         fRoboto,     fMonaKrypton);
-    theme_.RegisterFonts(ThemeType::DawnBringer16Dark,  fMonaKrypton,     fHackCode);
-    theme_.RegisterFonts(ThemeType::DawnBringer16Light, fMonaKrypton,     fHackCode);
-    theme_.RegisterFonts(ThemeType::Material,           fRoboto,     fHackCode);
-    theme_.RegisterFonts(ThemeType::MaterialDark,       fRoboto,     fHackCode);
-    theme_.RegisterFonts(ThemeType::MonoLight,          fJetBrains,  fJetBrains);
-    theme_.RegisterFonts(ThemeType::MonoDark,           fJetBrains,  fJetBrains);
-    theme_.RegisterFonts(ThemeType::DawnBringerLight,   fHackUi,     fMonaspace);
-    theme_.RegisterFonts(ThemeType::DawnBringerDark,    fHackUi,     fMonaspace);
-
-    // ── Navbar callback: sync TextArea code font on theme switch ──────────────
-    navbar_.onThemeApplied = [this] { textViewer_.SetCodeFont(theme_.codeFont); };
-
+    io.FontGlobalScale = (1.0f / dpi_);
 #if defined(__APPLE__)
     io.ConfigMacOSXBehaviors = true;
 #endif
 
-    // Apply startup theme. ApplyImGuiStyle must come first to store dpiScale_
-    // so that ApplyColorTheme can call ApplyThemeStyle_ with the correct scale.
-    theme_.ApplyImGuiStyle(dpi);
-    theme_.ApplyColorTheme(ThemeType::SolarizedDark);
+    // Apply startup theme via the customizer so palette colors are also applied.
+    theme_.ApplyImGuiStyle(dpi_);
+    customizer_.apply(theme_, activeTheme_);
 
     // Push initial code font into the text viewer.
     textViewer_.SetCodeFont(theme_.codeFont);
@@ -165,16 +127,26 @@ void App::Init()
     UpdateLayout();
     layout_.ApplyToImGui();
 
-    config_ = LoadAppConfig();
+    // Sync code font, palette colors and persistence whenever the navbar switches themes.
+    navbar_.onThemeApplied = [this](ui::ThemeStyle t) {
+        activeTheme_ = t;
+        LoadThemeFonts(t);          // lazy-load fonts; atlas rebuilt next frame
+        customizer_.apply(theme_, t);
+        textViewer_.SetCodeFont(theme_.codeFont);
+        if (browser_)    browser_->SetCodeFont(theme_.codeFont);
+        if (browser_fs_) browser_fs_->SetCodeFont(theme_.codeFont);
+        config_.activeTheme = t;
+        SaveAppConfig(config_);
+    };
 
-    const auto entries = Adapters::AdapterRegistry::Entries();
+    const auto entries = adapters::AdapterRegistry::Entries();
 
     const std::string_view preferredAdapter = !dbPath.empty()                ? std::string_view{adapterName}
                                               : !config_.adapterName.empty() ? std::string_view{config_.adapterName}
                                               : !entries.empty()             ? entries.front().name
                                                                              : std::string_view{};
 
-    if (const auto it = std::ranges::find(entries, preferredAdapter, &Adapters::AdapterEntry::name);
+    if (const auto it = std::ranges::find(entries, preferredAdapter, &adapters::AdapterEntry::name);
         it != entries.end()) {
         adapterIdx_ = static_cast<int>(std::distance(entries.begin(), it));
     }
@@ -217,6 +189,92 @@ void App::Cleanup()
     sg_shutdown();
 }
 
+// ── LoadThemeFonts ────────────────────────────────────────────────────────────
+//
+//  Lazily loads the UI (sans-serif) and mono (code) fonts for theme t into the
+//  ImGui font atlas.  Safe to call every frame; does nothing after the first call.
+//
+//  sokol_imgui sets ImGuiBackendFlags_RendererHasTextures so the atlas is
+//  rebuilt and the GPU texture re-uploaded automatically on the next frame.
+//
+void App::LoadThemeFonts(ui::ThemeStyle t)
+{
+    const int i = static_cast<int>(t);
+    if (themeFontsLoaded_[i]) return;
+
+    const ui::ThemeFonts& tf = customizer_.fonts(t);
+    ImGuiIO& io = ImGui::GetIO();
+
+    // Extended Unicode ranges for UI fonts (Basic Latin, Latin-1, dashes, arrows).
+    static const ImWchar kUiRanges[] = {
+        0x0020, 0x00FF,
+        0x2013, 0x2015,
+        0x2190, 0x21FF,
+        0,
+    };
+
+    // Helper: resolve an Rfs-relative path to a native absolute path.
+    // Font paths in JSON/builtin are written relative to resources/ (e.g.
+    // "fonts/Roboto-Medium.ttf"), so we prepend resources/ before resolving.
+    // Falls back to a direct exeDir_-relative lookup for paths that already
+    // start with "resources/".
+    auto resolve = [&](const std::string& rel) -> std::string {
+        if (rel.empty()) return {};
+        namespace fs = std::filesystem;
+        // Try resources/ prefix first (canonical location for bundled assets).
+        for (const fs::path candidate : { exeDir_ / "resources" / rel, exeDir_ / rel }) {
+            const auto r = rfs_.resolve(candidate);
+            if (!r || !r->readable()) continue;
+            std::error_code ec;
+            if (!fs::exists(candidate, ec) || ec) continue;
+            return candidate.string();
+        }
+        if (verbose_) std::println("[Font] not found or denied: {}", rel);
+        return {};
+    };
+
+    // ── UI (sans-serif) font — Font Awesome icons merged in ───────────────────
+    ImFont* uiFont = nullptr;
+    {
+        const std::string path = resolve(tf.ui.path);
+        if (!path.empty()) {
+            const float sz = (tf.ui.size_px > 0.f ? tf.ui.size_px : 15.f) * dpi_;
+            uiFont = io.Fonts->AddFontFromFileTTF(path.c_str(), sz, nullptr, kUiRanges);
+            if (uiFont) {
+                if (verbose_) std::println("[Font] ui  {} @ {:.0f}px: OK", tf.ui.path, sz);
+                // Merge FA icons into the UI font.
+                const std::string iconPath = resolve(tf.icon.path);
+                if (!iconPath.empty()) {
+                    const float isz = (tf.icon.size_px > 0.f ? tf.icon.size_px : 14.f) * dpi_;
+                    ImFontConfig cfg;
+                    cfg.MergeMode        = true;
+                    cfg.PixelSnapH       = true;
+                    cfg.GlyphMinAdvanceX = isz;
+                    io.Fonts->AddFontFromFileTTF(iconPath.c_str(), isz,
+                                                 &cfg, ui::icons::kFAGlyphRanges);
+                }
+            } else {
+                if (verbose_) std::println("[Font] ui  {} MISSING", tf.ui.path);
+            }
+        }
+    }
+
+    // ── Mono (code) font ──────────────────────────────────────────────────────
+    ImFont* monoFont = nullptr;
+    {
+        const std::string path = resolve(tf.mono.path);
+        if (!path.empty()) {
+            const float sz = (tf.mono.size_px > 0.f ? tf.mono.size_px : 14.f) * dpi_;
+            monoFont = io.Fonts->AddFontFromFileTTF(path.c_str(), sz);
+            if (verbose_) std::println("[Font] mono {} @ {:.0f}px: {}",
+                                        tf.mono.path, sz, monoFont ? "OK" : "MISSING");
+        }
+    }
+
+    theme_.RegisterFonts(t, uiFont, monoFont);
+    themeFontsLoaded_[i] = true;
+}
+
 void App::Frame()
 {
     UpdateLayout();
@@ -235,6 +293,10 @@ void App::Frame()
         showWelcome_ = true;
         connectError_.clear();
         navbar_.wantsOpen = false;
+    }
+    if (navbar_.wantsThemeCustomizer) {
+        customizer_.Toggle();
+        navbar_.wantsThemeCustomizer = false;
     }
 
     const simgui_frame_desc_t fd = {
@@ -311,7 +373,7 @@ void App::Event(const sapp_event* ev)
 void App::RenderFrame()
 {
     {
-        std::vector<UI::WindowEntry> wins;
+        std::vector<ui::WindowEntry> wins;
 
         if (browser_) {
             const std::string winId = browser_->ImGuiWindowId();
@@ -388,6 +450,15 @@ void App::RenderFrame()
     RenderImageViewer();
     RenderTextViewer();
     dropDialog_.Render();
+
+    // Theme Customizer floating window (toggled via Settings → "Theme Customizer…")
+    if (customizer_.Render(theme_, activeTheme_)) {
+        textViewer_.SetCodeFont(theme_.codeFont);
+        if (browser_)    browser_->SetCodeFont(theme_.codeFont);
+        if (browser_fs_) browser_fs_->SetCodeFont(theme_.codeFont);
+        config_.activeTheme = activeTheme_;
+        SaveAppConfig(config_);
+    }
 }
 
 void App::RenderWelcome()
@@ -408,7 +479,7 @@ void App::RenderWelcome()
     ImGui::Separator();
     ImGui::Spacing();
 
-    const auto entries = Adapters::AdapterRegistry::Entries();
+    const auto entries = adapters::AdapterRegistry::Entries();
 
     if (entries.empty()) {
         ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "No adapters registered.");
@@ -438,23 +509,23 @@ void App::RenderWelcome()
     ImGui::Spacing();
 
     const char* hint = "Connection string \xe2\x80\xa6";
-    if (const auto k = Adapters::kind_of(entries[adapterIdx_].name)) {
+    if (const auto k = adapters::kind_of(entries[adapterIdx_].name)) {
         switch (*k) {
-            case Adapters::AdapterKind::SQLite:
+            case adapters::AdapterKind::SQLite:
                 hint = "Path to .db or .sqlite file \xe2\x80\xa6";
                 break;
-            case Adapters::AdapterKind::CSV:
+            case adapters::AdapterKind::CSV:
                 hint = "Path to .csv file \xe2\x80\xa6";
                 break;
-            case Adapters::AdapterKind::Filesystem:
+            case adapters::AdapterKind::Filesystem:
                 hint = "Directory path \xe2\x80\xa6";
                 break;
-                case Adapters::AdapterKind::DuckDB:
-                    hint = "Path to .duckdb file, or :memory: for in-memory \xe2\x80\xa6";
-                    break;
-                case Adapters::AdapterKind::PostgreSQL:
-                    hint = "host=localhost port=5432 dbname=mydb user=postgres \xe2\x80\xa6";
-                    break;
+            case adapters::AdapterKind::DuckDB:
+                hint = "Path to .duckdb file, or :memory: for in-memory \xe2\x80\xa6";
+                break;
+            case adapters::AdapterKind::PostgreSQL:
+                hint = "host=localhost port=5432 dbname=mydb user=postgres \xe2\x80\xa6";
+                break;
         }
     }
 
@@ -512,7 +583,7 @@ void App::RenderWelcome()
         ImGui::SameLine();
         if (ImGui::SmallButton("Restore")) {
             std::snprintf(pathBuf_, sizeof(pathBuf_), "%s", config_.connectionString.c_str());
-            if (const auto it = std::ranges::find(entries, config_.adapterName, &Adapters::AdapterEntry::name);
+            if (const auto it = std::ranges::find(entries, config_.adapterName, &adapters::AdapterEntry::name);
                 it != entries.end()) {
                 adapterIdx_ = static_cast<int>(std::distance(entries.begin(), it));
             }
@@ -539,20 +610,20 @@ void App::TryConnect(const std::string& adapter, const std::string& path, const 
 {
     connectError_.clear();
 
-    Adapters::ConnectionParams p;
+    adapters::ConnectionParams p;
     p.adapterName      = adapter;
     p.connectionString = path;
     p.readOnly         = readOnly;
     if (!passphrase.empty())
         p.password = passphrase;
 
-    (void)Adapters::AdapterRegistry::CreateConnected(adapter, p)
-        .or_else([&](std::string err) -> std::expected<Adapters::DataSourcePtr, std::string> {
+    (void)adapters::AdapterRegistry::CreateConnected(adapter, p)
+        .or_else([&](std::string err) -> std::expected<adapters::DataSourcePtr, std::string> {
             connectError_ = err;
             std::println(stderr, "[App] Connect failed ({}): {}", adapter, err);
             return std::unexpected(std::move(err));
         })
-        .and_then([&](Adapters::DataSourcePtr ds) -> std::expected<void, std::string> {
+        .and_then([&](adapters::DataSourcePtr ds) -> std::expected<void, std::string> {
             config_.adapterName      = adapter;
             config_.connectionString = path;
             SaveAppConfig(config_);
@@ -564,6 +635,7 @@ void App::TryConnect(const std::string& adapter, const std::string& path, const 
                                               : std::filesystem::path(path).filename().string();
 
             browser_.emplace(std::move(ds), std::format("{} \xe2\x80\x94 {}", adapter, pathLabel));
+            browser_->SetCodeFont(theme_.codeFont);
             showWelcome_ = false;
 
 #ifdef DATAGRID_HAVE_DUCKDB
@@ -585,7 +657,7 @@ void App::TryConnect(const std::string& adapter, const std::string& path, const 
                         if (ImGui::Button("Scan") || go) {
                             if (scanPathBuf[0] != '\0' && browser_ && browser_->GetSource()) {
                                 namespace fs = std::filesystem;
-                                auto* duck   = dynamic_cast<Adapters::DuckDBAdapter*>(browser_->GetSource());
+                                auto* duck   = dynamic_cast<adapters::DuckDBAdapter*>(browser_->GetSource());
                                 if (duck) {
                                     const fs::path  p{scanPathBuf};
                                     std::error_code ec;
@@ -632,14 +704,14 @@ void App::TryConnect(const std::string& adapter, const std::string& path, const 
 
 void App::InitFsBrowser(const std::string& dirPath)
 {
-    Adapters::ConnectionParams fsp;
-    fsp.adapterName      = std::string{Adapters::name_of(Adapters::AdapterKind::Filesystem)};
+    adapters::ConnectionParams fsp;
+    fsp.adapterName      = std::string{adapters::name_of(adapters::AdapterKind::Filesystem)};
     fsp.connectionString = dirPath;
 
-    (void)Adapters::AdapterRegistry::CreateConnected(fsp.adapterName, fsp)
-        .and_then([&](Adapters::DataSourcePtr ds) -> std::expected<void, std::string> {
+    (void)adapters::AdapterRegistry::CreateConnected(fsp.adapterName, fsp)
+        .and_then([&](adapters::DataSourcePtr ds) -> std::expected<void, std::string> {
             // Keep a typed pointer for navigation callbacks (raw — owned by the DataBrowser)
-            fsAdapter_ = dynamic_cast<Adapters::FilesystemAdapter*>(ds.get());
+            fsAdapter_ = dynamic_cast<adapters::FilesystemAdapter*>(ds.get());
 
             const std::string title = std::format("Files \xe2\x80\x94 {}",
                                                   std::filesystem::path(dirPath).filename().empty()
@@ -647,6 +719,7 @@ void App::InitFsBrowser(const std::string& dirPath)
                                                       : std::filesystem::path(dirPath).filename().string());
 
             browser_fs_.emplace(std::move(ds), title);
+            browser_fs_->SetCodeFont(theme_.codeFont);
 
             std::snprintf(fsPathBuf_, sizeof(fsPathBuf_), "%s", dirPath.c_str());
             fsPathSync_ = false;
@@ -660,7 +733,7 @@ void App::InitFsBrowser(const std::string& dirPath)
                     const std::string kind = row[1];
                     const std::string path = row[5];
                     if (kind == "dir") {
-                        if constexpr (UI::Platform::kClickNavigates)
+                        if constexpr (io::kClickNavigates)
                             NavigateFs(path);
                     } else if (kind == "file") {
                         if (path.empty())
@@ -685,32 +758,32 @@ void App::InitFsBrowser(const std::string& dirPath)
                     if (row.size() < 6)
                         return;
 
-                    UI::FilePayload payload{};
+                    io::FilePayload payload{};
                     payload.sourceBrowserId = browser_fs_->InstanceId();
 
                     namespace fs               = std::filesystem;
                     const std::string& absPath = row[5];
                     const std::string& kind    = row[1];
                     const std::string  fname   = fs::path(absPath).filename().string();
-                    const std::string  ext     = UI::FileExtension(absPath);
+                    const std::string  ext     = io::FileExtension(absPath);
 
                     std::snprintf(payload.path, sizeof(payload.path), "%s", absPath.c_str());
                     std::snprintf(payload.kind, sizeof(payload.kind), "%s", kind.c_str());
                     std::snprintf(payload.name, sizeof(payload.name), "%s", fname.c_str());
                     std::snprintf(payload.extension, sizeof(payload.extension), "%s", ext.c_str());
 
-                    ImGui::SetDragDropPayload(UI::kFilePayloadType, &payload, sizeof(payload));
+                    ImGui::SetDragDropPayload(io::kFilePayloadType, &payload, sizeof(payload));
 
-                    const char* icon = (kind == "dir") ? Icons::Folder : Icons::File;
+                    const char* icon = (kind == "dir") ? ui::icons::Folder : ui::icons::File;
                     ImGui::TextDisabled("%s ", icon);
                     ImGui::SameLine();
                     ImGui::Text("%s", fname.c_str());
                 });
 
                 browser_fs_->SetDropHandler([this](const char* type, const void* data, std::size_t sz) {
-                    using namespace UI;
-                    if (std::string_view{type} == kFilePayloadType && sz == sizeof(FilePayload)) {
-                        const auto&       fp     = *static_cast<const FilePayload*>(data);
+                    // using namespace io;
+                    if (std::string_view{type} == io::kFilePayloadType && sz == sizeof(io::FilePayload)) {
+                        const auto&       fp     = *static_cast<const io::FilePayload*>(data);
                         const std::string dstDir = fsAdapter_ ? fsAdapter_->GetCurrentPath() : "";
                         dropDialog_.TriggerFsCopyMove(fp, dstDir, &*browser_fs_);
                     }
@@ -720,14 +793,14 @@ void App::InitFsBrowser(const std::string& dirPath)
                     for (auto& col : cols) {
                         if (col.key == "name") {
                             col.renderer = [](const std::string& name, int) {
-                                const char* icon = UI::IsImageFile(name) ? Icons::FileImage : Icons::File;
+                                const char* icon = ui::IsImageFile(name) ? ui::icons::FileImage : ui::icons::File;
                                 ImGui::TextDisabled("%s", icon);
                                 ImGui::SameLine(0.0f, 4.0f);
                                 ImGui::TextUnformatted(name.c_str());
                             };
                         } else if (col.key == "kind") {
                             col.renderer = [](const std::string& kind, int) {
-                                const char* icon = (kind == "dir") ? Icons::Folder : Icons::File;
+                                const char* icon = (kind == "dir") ? ui::icons::Folder : ui::icons::File;
                                 ImGui::TextDisabled("%s", icon);
                                 ImGui::SameLine(0.0f, 4.0f);
                                 ImGui::TextUnformatted(kind.c_str());
@@ -756,30 +829,30 @@ void App::OpenFsFile(const std::string& path, const std::string& how)
     if (how == "hex")   { return; } // hex view opened directly via context menu
 
     if (how == "system") {
-        UI::Platform::OpenWithSystem(path);
+        io::OpenWithSystem(path);
         return;
     }
 
     // "auto" — detect by content
     if (!fs::is_regular_file(path, ec) || ec) {
         // Might be a directory or bundle — hand to the OS
-        UI::Platform::OpenWithSystem(path);
+        io::OpenWithSystem(path);
         return;
     }
 
-    if (UI::IsImageFile(path))  { OpenImageViewer(path);  return; }
-    if (UI::IsSqliteFile(path)) { OpenSqliteViewer(path); return; }
-    if (UI::IsPdfFile(path))    { UI::Platform::OpenWithSystem(path); return; }
+    if (ui::IsImageFile(path))  { OpenImageViewer(path);  return; }
+    if (ui::IsSqliteFile(path)) { OpenSqliteViewer(path); return; }
+    if (ui::IsPdfFile(path))    { io::OpenWithSystem(path); return; }
 
     // Check executable — launch via OS to respect interpreter associations
-    if (UI::IsExecutableFile(path)) { UI::Platform::OpenWithSystem(path); return; }
+    if (ui::IsExecutableFile(path)) {io::OpenWithSystem(path); return; }
 
     // Fall back to text sniffing
-    const auto sniff = UI::sniff_file(path);
+    const auto sniff = ui::sniff_file(path);
     if (sniff.is_text)
         OpenTextViewer(path);
     else
-        UI::Platform::OpenWithSystem(path); // unknown binary — let the OS decide
+        io::OpenWithSystem(path); // unknown binary — let the OS decide
 }
 
 void App::RenderFsNavBar()
@@ -809,7 +882,7 @@ void App::RenderFsNavBar()
 
     ImGui::SameLine();
 
-    if (ImGui::Button(Icons::Home)) {
+    if (ImGui::Button(ui::icons::Home)) {
         fsAdapter_->NavigateHome();
         const std::string p = fsAdapter_->GetCurrentPath();
         browser_fs_->NavigateTo(p);
@@ -855,7 +928,7 @@ void App::NavigateFs(std::string absolutePath)
             fs::path(absolutePath).filename().empty() ? absolutePath : fs::path(absolutePath).filename().string()));
         fsPathSync_ = true;
     } else if (fsAdapter_->EntryIsFile(absolutePath)) {
-        UI::Platform::OpenWithSystem(absolutePath);
+        io::OpenWithSystem(absolutePath);
     }
 }
 
@@ -884,7 +957,7 @@ void App::OpenImageViewer(const std::string& path)
         std::error_code ec;
         for (const auto& entry : fs::directory_iterator(parent, ec)) {
             std::error_code ec2;
-            if (entry.is_regular_file(ec2) && !ec2 && UI::IsImageFile(entry.path()))
+            if (entry.is_regular_file(ec2) && !ec2 && ui::IsImageFile(entry.path()))
                 imageViewerSiblings_.push_back(entry.path().string());
         }
         std::ranges::sort(imageViewerSiblings_);
@@ -1109,7 +1182,7 @@ void App::SetupDbBrowserDragDrop()
         return;
 
     browser_->SetDragSourceCallback([this](int rowIdx, const std::vector<std::string>& row) {
-        UI::RowPayload payload{};
+        io::RowPayload payload{};
         payload.sourceBrowserId = browser_->InstanceId();
         payload.pageRowIndex    = rowIdx;
 
@@ -1118,11 +1191,11 @@ void App::SetupDbBrowserDragDrop()
         std::snprintf(payload.tableName, sizeof(payload.tableName), "%s", browser_->CurrentTable().c_str());
 
         const auto        keys    = browser_->GetCurrentColumnKeys();
-        const std::string encoded = UI::EncodeRowData(keys, row);
+        const std::string encoded = io::EncodeRowData(keys, row);
         std::snprintf(payload.rowData, sizeof(payload.rowData), "%s", encoded.c_str());
 
-        ImGui::SetDragDropPayload(UI::kRowPayloadType, &payload, sizeof(payload));
-        ImGui::TextDisabled("%s  ", Icons::TableIcon);
+        ImGui::SetDragDropPayload(io::kRowPayloadType, &payload, sizeof(payload));
+        ImGui::TextDisabled("%s  ", ui::icons::TableIcon);
         ImGui::SameLine();
         ImGui::Text("Row from %s", browser_->CurrentTable().c_str());
     });
@@ -1130,29 +1203,30 @@ void App::SetupDbBrowserDragDrop()
     browser_->SetDropHandler([this](const char* type, const void* data, std::size_t sz) {
         const std::string_view t{type};
 
-        if (t == UI::kFilePayloadType && sz == sizeof(UI::FilePayload)) {
-            const auto& fp     = *static_cast<const UI::FilePayload*>(data);
-            const auto  dbType = UI::SniffDbType(fp.path);
-            if (dbType != UI::FileDbType::Unknown) {
+        if (t == io::kFilePayloadType && sz == sizeof(io::FilePayload)) {
+            const auto& fp     = *static_cast<const io::FilePayload*>(data);
+            const auto  dbType = io::SniffDbType(fp.path);
+            if (dbType != io::FileDbType::Unknown) {
                 dropDialog_.TriggerDbFileOpen(fp, &*browser_);
             }
 #ifdef DATAGRID_HAVE_DUCKDB
-            else if (Adapters::DuckDBAdapter::IsQueryableExtension(fp.extension) && browser_ && browser_->GetSource() &&
+            else if (adapters::DuckDBAdapter::IsQueryableExtension(fp.extension) && browser_ && browser_->GetSource() &&
                      browser_->GetSource()->AdapterName() == "duckdb") {
                 dropDialog_.TriggerFileToView(fp, &*browser_);
             }
 #endif
-        } else if (t == UI::kRowPayloadType && sz == sizeof(UI::RowPayload)) {
-            const auto& rp = *static_cast<const UI::RowPayload*>(data);
+        } else if (t == io::kRowPayloadType && sz == sizeof(io::RowPayload)) {
+            const auto& rp = *static_cast<const io::RowPayload*>(data);
             if (!browser_ || !browser_->GetSource())
                 return;
             if (!browser_->GetSource()->SupportsWrite())
                 return;
 
-            auto [srcKeys, srcVals] = UI::ParseRowData(rp.rowData);
+            auto [srcKeys, srcVals] = io::ParseRowData(rp.rowData);
             const auto targetCols   = browser_->GetSource()->GetColumns(browser_->CurrentTable());
 
             dropDialog_.TriggerRowInsert(rp, &*browser_, targetCols, srcKeys, srcVals);
         }
     });
+}
 }

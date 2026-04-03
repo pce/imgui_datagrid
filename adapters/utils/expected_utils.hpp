@@ -5,7 +5,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace Adapters::Utils {
+namespace datagrid::adapters {
 
 /// Returns expected<void,E>{} when cond is true, std::unexpected(msg) when false.
 /// @tparam E Error type (deduced). Must be move-constructible.
@@ -42,4 +42,4 @@ template<typename T, typename E>
     return std::unexpected(std::move(msg));
 }
 
-} // namespace Adapters::Utils
+} // namespace datagrid::adapters

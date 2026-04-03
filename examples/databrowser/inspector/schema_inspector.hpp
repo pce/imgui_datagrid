@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace Inspector {
+namespace datagrid::inspector {
 
 /// Per-column cached analysis result.
 struct ColumnAnalysis
@@ -19,8 +19,8 @@ struct ColumnAnalysis
     bool        nullable   = true;
     bool        primaryKey = false;
 
-    // From TypeInferrer
-    TypeInfer::TypeResult inference;
+    // From type_inferrer
+    adapters::utils::TypeResult inference;
 
     // First 3 distinct non-empty sample values
     std::array<std::string, 3> samples     = {};
@@ -38,8 +38,8 @@ struct TableAnalysis
 
     // CSV-specific fields (populated when adapterName == "csv")
     bool                       hasCsvInfo          = false;
-    TypeInfer::DelimiterResult csvDelimiter        = {};
-    TypeInfer::HeaderResult    csvHeader           = {};
+    adapters::utils::DelimiterResult csvDelimiter        = {};
+    adapters::utils::HeaderResult    csvHeader           = {};
     char                       configuredDelimiter = ',';
 };
 
@@ -56,7 +56,7 @@ class SchemaInspector
 
     /// Fetch up to `sampleSize` rows from `tableName` and run type inference.
     /// Replaces any previously cached result.  `source` is not retained.
-    void Open(Adapters::IDataSource* source, const std::string& tableName, int sampleSize = 100);
+    void Open(adapters::IDataSource* source, const std::string& tableName, int sampleSize = 100);
 
     /// Render the inspector window.  Call every frame.
     /// No-op if the inspector has never been opened or has been closed.
@@ -95,4 +95,4 @@ class SchemaInspector
     int           instanceId_ = 0; ///< Used to disambiguate window IDs
 };
 
-} // namespace Inspector
+} // namespace datagrid::inspector

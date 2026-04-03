@@ -5,9 +5,9 @@
 #include <format>
 #include <unordered_set>
 
-namespace Inspector {
+namespace datagrid::inspector {
 
-void SchemaInspector::Open(Adapters::IDataSource* source, const std::string& tableName, int sampleSize)
+void SchemaInspector::Open(adapters::IDataSource* source, const std::string& tableName, int sampleSize)
 {
     analysis_ = {};
 
@@ -21,17 +21,17 @@ void SchemaInspector::Open(Adapters::IDataSource* source, const std::string& tab
 
     const auto colInfos = source->GetColumns(tableName);
 
-    Adapters::DataQuery q;
+    adapters::DataQuery q;
     q.table    = tableName;
     q.pageSize = sampleSize;
     q.page     = 0;
 
-    const Adapters::QueryResult res = source->ExecuteQuery(q);
+    const adapters::QueryResult res = source->ExecuteQuery(q);
     analysis_.sampleRows            = static_cast<int>(res.rows.size());
 
     // CountQuery uses the same (no-filter) DataQuery → total rows
     {
-        Adapters::DataQuery countQ;
+        adapters::DataQuery countQ;
         countQ.table        = tableName;
         countQ.pageSize     = 1;
         analysis_.totalRows = source->CountQuery(countQ);
@@ -66,7 +66,7 @@ void SchemaInspector::Open(Adapters::IDataSource* source, const std::string& tab
             }
         }
 
-        col.inference = TypeInfer::InferColumnType(allValues);
+        col.inference = adapters::utils::InferColumnType(allValues);
         analysis_.columns.push_back(std::move(col));
     }
 
@@ -120,7 +120,7 @@ void SchemaInspector::Open(Adapters::IDataSource* source, const std::string& tab
                     pseudoLines.push_back(dataLine);
                 }
             }
-            analysis_.csvDelimiter = TypeInfer::DetectDelimiter(pseudoLines);
+            analysis_.csvDelimiter = adapters::utils::DetectDelimiter(pseudoLines);
 
             // Header detection: compare column names vs first data row values
             if (!res.rows.empty()) {
@@ -139,7 +139,7 @@ void SchemaInspector::Open(Adapters::IDataSource* source, const std::string& tab
                     for (size_t i = 0; i < analysis_.columns.size() && i < dr.size(); ++i)
                         secondFields.push_back(dr[i]);
                 }
-                analysis_.csvHeader = TypeInfer::DetectHeader(firstFields, secondFields);
+                analysis_.csvHeader = adapters::utils::DetectHeader(firstFields, secondFields);
             }
         }
     }
@@ -277,23 +277,23 @@ void SchemaInspector::RenderColumnRow(const ColumnAnalysis& col, int rowIdx)
 
     ImGui::TableSetColumnIndex(2);
     {
-        const char* tname = TypeInfer::TypeName(col.inference.type);
+        const char* tname = adapters::utils::TypeName(col.inference.type);
         // Colour text by inferred type for quick scanning
         ImVec4 col_colour;
         switch (col.inference.type) {
-            case TypeInfer::InferredType::Boolean:
+            case adapters::utils::InferredType::Boolean:
                 col_colour = ImVec4(0.9f, 0.5f, 0.9f, 1.0f);
                 break;
-            case TypeInfer::InferredType::Integer:
+            case adapters::utils::InferredType::Integer:
                 col_colour = ImVec4(0.4f, 0.85f, 1.0f, 1.0f);
                 break;
-            case TypeInfer::InferredType::Real:
+            case adapters::utils::InferredType::Real:
                 col_colour = ImVec4(0.3f, 0.9f, 0.7f, 1.0f);
                 break;
-            case TypeInfer::InferredType::DateTime:
+            case adapters::utils::InferredType::DateTime:
                 col_colour = ImVec4(1.0f, 0.75f, 0.3f, 1.0f);
                 break;
-            case TypeInfer::InferredType::Date:
+            case adapters::utils::InferredType::Date:
                 col_colour = ImVec4(1.0f, 0.65f, 0.2f, 1.0f);
                 break;
             default:
@@ -400,4 +400,4 @@ void SchemaInspector::RenderCsvSection()
     }
 }
 
-} // namespace Inspector
+} // namespace datagrid::inspector

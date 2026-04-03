@@ -7,15 +7,15 @@
 #include <sstream>
 #include <string>
 
-namespace {
-const Adapters::RegisterAdapter<Adapters::CsvAdapter> kCSVReg{"csv"};
-}
 
-namespace Adapters {
+
+namespace datagrid::adapters {
 
 CsvAdapter::CsvAdapter() = default;
 
-std::vector<std::string> CsvAdapter::ParseRow(const std::string& line, char sep)
+
+std::vector<std::string> CsvAdapter::
+    ParseRow(const std::string& line, char sep)
 {
     std::vector<std::string> fields;
     std::string              field;
@@ -299,34 +299,34 @@ QueryResult CsvAdapter::Execute(const std::string& sql) const
         return result;
     }
 
-    auto planRes = Query::TabularQuery::parse(sql);
+    auto planRes = TabularQuery::parse(sql);
     if (!planRes) {
         result.error = "SQL parse error: " + planRes.error();
         return result;
     }
-    const Query::QueryPlan& plan = *planRes;
+    const QueryPlan& plan = *planRes;
 
     if (!plan.fromSource.empty() && plan.fromSource != tableName_ && plan.fromSource != "*") {
         result.error = "Unknown table '" + plan.fromSource + "'. Available: '" + tableName_ + "'.";
         return result;
     }
 
-    return Query::TabularQuery::execute(plan, BuildSoA(), header_);
+    return TabularQuery::execute(plan, BuildSoA(), header_);
 }
 
-Query::TabularSoA CsvAdapter::BuildSoA() const
+TabularSoA CsvAdapter::BuildSoA() const
 {
     // CSV columns are all Text; TabularQuery applies dynamic numeric coercion
     // for < > <= >= operators (SQLite affinity behaviour).
     std::vector<std::string>    names;
-    std::vector<Query::ColType> types;
+    std::vector<ColType> types;
     names.reserve(header_.size());
     types.reserve(header_.size());
     for (const auto& ci : header_) {
         names.push_back(ci.name);
-        types.push_back(Query::ColType::Text);
+        types.push_back(ColType::Text);
     }
-    return Query::TabularSoA::from_rows(names, types, allRows_);
+    return TabularSoA::from_rows(names, types, allRows_);
 }
 
-} // namespace Adapters
+} // namespace datagrid::adapters

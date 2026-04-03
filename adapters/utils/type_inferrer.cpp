@@ -6,8 +6,6 @@
 #include <cstdlib>
 #include <unordered_set>
 
-namespace TypeInfer {
-
 namespace {
 
 std::string ToLower(std::string_view s)
@@ -63,15 +61,15 @@ bool IsDate(std::string_view s)
 {
     if (s.size() < 8)
         return false;
-    if (std::isdigit((unsigned char)s[0]) && std::isdigit((unsigned char)s[1]) && std::isdigit((unsigned char)s[2]) &&
-        std::isdigit((unsigned char)s[3]) && (s[4] == '-' || s[4] == '/') && std::isdigit((unsigned char)s[5]) &&
-        std::isdigit((unsigned char)s[6]) && (s[7] == '-' || s[7] == '/') && s.size() >= 10 &&
-        std::isdigit((unsigned char)s[8]) && std::isdigit((unsigned char)s[9]))
+    if (std::isdigit(static_cast<unsigned char>(s[0])) && std::isdigit(static_cast<unsigned char>(s[1])) && std::isdigit(static_cast<unsigned char>(s[2])) &&
+        std::isdigit(static_cast<unsigned char>(s[3])) && (s[4] == '-' || s[4] == '/') && std::isdigit(static_cast<unsigned char>(s[5])) &&
+        std::isdigit(static_cast<unsigned char>(s[6])) && (s[7] == '-' || s[7] == '/') && s.size() >= 10 &&
+        std::isdigit(static_cast<unsigned char>(s[8])) && std::isdigit(static_cast<unsigned char>(s[9])))
         return true;
-    if (s.size() >= 10 && std::isdigit((unsigned char)s[0]) && std::isdigit((unsigned char)s[1]) &&
-        (s[2] == '-' || s[2] == '/') && std::isdigit((unsigned char)s[3]) && std::isdigit((unsigned char)s[4]) &&
-        (s[5] == '-' || s[5] == '/') && std::isdigit((unsigned char)s[6]) && std::isdigit((unsigned char)s[7]) &&
-        std::isdigit((unsigned char)s[8]) && std::isdigit((unsigned char)s[9]))
+    if (s.size() >= 10 && std::isdigit(static_cast<unsigned char>(s[0])) && std::isdigit(static_cast<unsigned char>(s[1])) &&
+        (s[2] == '-' || s[2] == '/') && std::isdigit(static_cast<unsigned char>(s[3])) && std::isdigit(static_cast<unsigned char>(s[4])) &&
+        (s[5] == '-' || s[5] == '/') && std::isdigit(static_cast<unsigned char>(s[6])) && std::isdigit(static_cast<unsigned char>(s[7])) &&
+        std::isdigit(static_cast<unsigned char>(s[8])) && std::isdigit(static_cast<unsigned char>(s[9])))
         return true;
     return false;
 }
@@ -80,13 +78,13 @@ bool IsDateTime(std::string_view s)
 {
     if (s.size() < 16)
         return false;
-    if (!std::isdigit((unsigned char)s[0]) || !std::isdigit((unsigned char)s[1]) ||
-        !std::isdigit((unsigned char)s[2]) || !std::isdigit((unsigned char)s[3]) || (s[4] != '-' && s[4] != '/'))
+    if (!std::isdigit(static_cast<unsigned char>(s[0])) || !std::isdigit(static_cast<unsigned char>(s[1])) ||
+        !std::isdigit(static_cast<unsigned char>(s[2])) || !std::isdigit(static_cast<unsigned char>(s[3])) || (s[4] != '-' && s[4] != '/'))
         return false;
     if (s[10] != 'T' && s[10] != ' ')
         return false;
-    if (!std::isdigit((unsigned char)s[11]) || !std::isdigit((unsigned char)s[12]) || s[13] != ':' ||
-        !std::isdigit((unsigned char)s[14]) || !std::isdigit((unsigned char)s[15]))
+    if (!std::isdigit(static_cast<unsigned char>(s[11])) || !std::isdigit(static_cast<unsigned char>(s[12])) || s[13] != ':' ||
+        !std::isdigit(static_cast<unsigned char>(s[14])) || !std::isdigit(static_cast<unsigned char>(s[15])))
         return false;
     return true;
 }
@@ -110,6 +108,9 @@ int CountOutsideQuotes(std::string_view line, char delim)
 }
 
 } // anonymous namespace
+
+
+namespace datagrid::adapters::utils {
 
 const char* TypeName(InferredType t) noexcept
 {
@@ -340,19 +341,18 @@ HeaderResult DetectHeader(const std::vector<std::string>& firstRow, const std::v
         for (const auto& v : firstRow) {
             if (v.empty())
                 continue;
-            const unsigned char first = static_cast<unsigned char>(v[0]);
-            if (!std::isdigit(first) && v.size() <= 40)
+            if (const auto first = static_cast<unsigned char>(v[0]); !std::isdigit(first) && v.size() <= 40)
                 ++idLike;
         }
         if (static_cast<float>(idLike) / static_cast<float>(firstRow.size()) > 0.70f) {
             score += 0.10f;
-            reasons.push_back("identifier-like names");
+            reasons.emplace_back("identifier-like names");
         }
     }
 
     if (secondRow.empty()) {
         score = 0.5f + (score - 0.5f) * 0.5f;
-        reasons.push_back("single row — low confidence");
+        reasons.emplace_back("single row — low confidence");
     }
 
     score = std::max(0.0f, std::min(1.0f, score));
@@ -372,4 +372,4 @@ HeaderResult DetectHeader(const std::vector<std::string>& firstRow, const std::v
     return result;
 }
 
-} // namespace TypeInfer
+} // namespace datagrid::adapters::utils

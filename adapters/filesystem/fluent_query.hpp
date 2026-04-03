@@ -1,6 +1,6 @@
 #pragma once
-#include "../query/tabular_query.hpp" // TabularQuery, QueryPlan, TabularSoA
-#include "filesystem_adapter.hpp"     // FilesystemEntry, QueryResult, DataQuery
+#include "../utils/tabular_query.hpp"
+#include "filesystem_adapter.hpp"
 
 #include <cstdint>
 #include <expected>
@@ -12,7 +12,7 @@
 
 namespace fs = std::filesystem;
 
-namespace Adapters::Fs {
+namespace datagrid::adapters {
 
 inline namespace literals {
 constexpr std::uintmax_t operator""_B(unsigned long long n)
@@ -124,6 +124,21 @@ class FluentQuery
     FluentQuery& limit(int n);
     FluentQuery& offset(int n);
 
+    /// Inject a VFS access-check predicate.
+    ///
+    /// When set, `entries()` calls `fn(dir_)` before iterating — returning an
+    /// empty result when access is denied.  This decouples FluentQuery from any
+    /// concrete VFS type: callers pass a lambda that wraps their Rfs, mock, or
+    /// in-memory backend:
+    ///
+    ///   query.with_access([&rfs](const fs::path& p) {
+    ///       auto r = rfs.resolve(p);
+    ///       return r && r->readable();
+    ///   });
+    ///
+    /// Passing nullptr (the default) disables the check.
+    FluentQuery& with_access(std::function<bool(const fs::path&)> fn);
+
     /// Run the query and return a DataBrowser-compatible QueryResult.
     [[nodiscard]] QueryResult execute() const;
     /// Count matching entries without building row data.
@@ -150,83 +165,11 @@ class FluentQuery
     bool                     dirsFirst_  = true;
 
     /// SQL path: set by from_sql(), triggers SoA bitmask filter in entries().
-    bool             hasSqlPlan_ = false;
-    Query::QueryPlan sqlPlan_;
+    bool        hasSqlPlan_ = false;
+    QueryPlan   sqlPlan_;
+
+    /// Optional VFS gate — set by with_access().  Null = no check (default).
+    std::function<bool(const fs::path&)> accessCheck_;
 };
 
-} // namespace Adapters::Fs
-
-namespace Adapters::FsLinq {
-using FsQuery   = Fs::FluentQuery;
-using EntryPred = Fs::EntryPred;
-// Factories:
-inline auto kind_is(std::string_view k)
-{
-    return Fs::kind_is(k);
-}
-inline auto is_file()
-{
-    return Fs::is_file();
-}
-inline auto is_dir()
-{
-    return Fs::is_dir();
-}
-inline auto is_symlink()
-{
-    return Fs::is_symlink();
-}
-inline auto ext_is(std::string_view e)
-{
-    return Fs::ext_is(e);
-}
-inline auto ext_in(std::vector<std::string> v)
-{
-    return Fs::ext_in(std::move(v));
-}
-inline auto name_eq(std::string_view n)
-{
-    return Fs::name_eq(n);
-}
-inline auto name_contains(std::string_view s)
-{
-    return Fs::name_contains(s);
-}
-inline auto name_like(std::string_view p)
-{
-    return Fs::name_like(p);
-}
-inline auto name_ilike(std::string_view p)
-{
-    return Fs::name_ilike(p);
-}
-inline auto name_glob(std::string_view p)
-{
-    return Fs::name_glob(p);
-}
-inline auto size_eq(std::uintmax_t n)
-{
-    return Fs::size_eq(n);
-}
-inline auto size_gt(std::uintmax_t n)
-{
-    return Fs::size_gt(n);
-}
-inline auto size_lt(std::uintmax_t n)
-{
-    return Fs::size_lt(n);
-}
-inline auto size_ge(std::uintmax_t n)
-{
-    return Fs::size_ge(n);
-}
-inline auto size_le(std::uintmax_t n)
-{
-    return Fs::size_le(n);
-}
-inline auto size_between(std::uintmax_t lo, std::uintmax_t hi)
-{
-    return Fs::size_between(lo, hi);
-}
-using namespace Adapters::Fs::literals; // re-export _KB, _MB etc.
-} // namespace Adapters::FsLinq
+} // namespace datagrid::adapters

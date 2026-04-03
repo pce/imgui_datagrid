@@ -1,21 +1,22 @@
 # =============================================================================
 #  tests/CMakeLists.txt
 #
-#  Builds the test binary (datagrid_tests) that links ONLY against:
-#    • datagrid_adapters  (SQLiteAdapter, CsvAdapter, AdapterRegistry,
-#                          TypeInferrer — no imgui, no raylib)
+#  Builds the test binaries that link ONLY against:
+#    • datagrid_adapters  (SQLiteAdapter, CsvAdapter, FilesystemAdapter,
+#                          AdapterRegistry, TypeInferrer — no imgui, no sokol)
 #    • Catch2 v3
 #
 #  datagrid_adapters is defined in the root CMakeLists and carries its
 #  PUBLIC include directory (the repo root), so all test sources can use:
 #
-#    #include "adapters/csv/CsvAdapter.hpp"
-#    #include "adapters/sqlite/SQLiteAdapter.hpp"
-#    #include "adapters/utils/TypeInferrer.hpp"
-#    #include "adapters/AdapterRegistry.hpp"
-#    #include "adapters/IDataSource.hpp"
+#    #include "adapters/csv/csv_adapter.hpp"
+#    #include "adapters/sqlite/sqlite_adapter.hpp"
+#    #include "adapters/filesystem/filesystem_adapter.hpp"
+#    #include "adapters/utils/type_inferrer.hpp"
+#    #include "adapters/adapter_registry.hpp"
+#    #include "adapters/data_source.hpp"
 #
-#  No raylib, no imgui, no rlimgui — keeps the test build fast and proves
+#  No sokol, no imgui — keeps the adapter-layer test build fast and proves
 #  the adapter layer is independent of the rendering stack.
 # =============================================================================
 
@@ -48,7 +49,7 @@ add_executable(datagrid_tests
     test_filesystem_adapter.cpp
 )
 
-target_compile_features(datagrid_tests PRIVATE cxx_std_17)
+target_compile_features(datagrid_tests PRIVATE cxx_std_23)
 
 # datagrid_adapters (defined in root CMakeLists) carries:
 #   - all adapter + TypeInferrer sources already compiled

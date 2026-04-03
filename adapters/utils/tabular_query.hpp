@@ -7,7 +7,7 @@
 #include <string_view>
 #include <vector>
 
-namespace Adapters::Query {
+namespace datagrid::adapters {
 
 enum class ColType
 {
@@ -125,4 +125,4 @@ class TabularQuery
     applyInOp(const std::vector<std::string>& vals, const std::vector<std::string>& col, std::vector<uint8_t>& mask);
 };
 
-} // namespace Adapters::Query
+} // namespace datagrid::adapters

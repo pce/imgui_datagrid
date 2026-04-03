@@ -9,6 +9,8 @@
 #include <fstream>
 #include <string>
 
+using namespace datagrid::adapters;
+
 namespace fs = std::filesystem;
 
 static fs::path WriteTempCsv(const std::string& name, const std::string& content)
@@ -44,8 +46,8 @@ TEST_CASE("CsvAdapter: connect to valid file", "[csv]")
                  "2,Bob,87.0\n"
                  "3,Charlie,91.2\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
 
     REQUIRE(adapter.Connect(p).has_value());
@@ -55,8 +57,8 @@ TEST_CASE("CsvAdapter: connect to valid file", "[csv]")
 
 TEST_CASE("CsvAdapter: connect to non-existent file", "[csv]")
 {
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = "/no/such/path/missing_file_xyz.csv";
 
     REQUIRE_FALSE(adapter.Connect(p).has_value());
@@ -67,8 +69,8 @@ TEST_CASE("CsvAdapter: connect to non-existent file", "[csv]")
 TEST_CASE("CsvAdapter: disconnect clears state", "[csv]")
 {
     TempFile                   tmp("dg_test_disconnect.csv", "a,b\n1,2\n");
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
 
     REQUIRE(adapter.Connect(p).has_value());
@@ -79,8 +81,8 @@ TEST_CASE("CsvAdapter: disconnect clears state", "[csv]")
 TEST_CASE("CsvAdapter: GetTables returns stem name", "[csv]")
 {
     TempFile                   tmp("my_records.csv", "x,y\n1,2\n");
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -96,8 +98,8 @@ TEST_CASE("CsvAdapter: GetColumns returns header row", "[csv]")
                  "id,name,score\n"
                  "1,Alice,95.5\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -111,8 +113,8 @@ TEST_CASE("CsvAdapter: GetColumns returns header row", "[csv]")
 TEST_CASE("CsvAdapter: GetColumns on unknown table returns empty", "[csv]")
 {
     TempFile                   tmp("dg_test_unknowntbl.csv", "a,b\n1,2\n");
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -122,8 +124,8 @@ TEST_CASE("CsvAdapter: GetColumns on unknown table returns empty", "[csv]")
 TEST_CASE("CsvAdapter: GetCatalogs returns file path", "[csv]")
 {
     TempFile                   tmp("dg_test_catalogs.csv", "a\n1\n");
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -140,8 +142,8 @@ TEST_CASE("CsvAdapter: AdapterLabel reflects file and row count", "[csv]")
                  "b\n"
                  "c\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p).has_value());
 
@@ -157,12 +159,12 @@ TEST_CASE("CsvAdapter: ExecuteQuery returns all rows unpaged", "[csv]")
                  "2,Bob\n"
                  "3,Charlie\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p).has_value());
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table    = "dg_test_query";
     q.pageSize = 100;
     q.page     = 0;
@@ -180,12 +182,12 @@ TEST_CASE("CsvAdapter: ExecuteQuery row values match CSV content", "[csv]")
                  "Alice,95\n"
                  "Bob,87\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p));
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table    = "dg_test_values";
     q.pageSize = 100;
 
@@ -205,12 +207,12 @@ TEST_CASE("CsvAdapter: pagination returns correct page slice", "[csv]")
                  "n\n"
                  "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p));
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table    = "dg_test_page";
     q.pageSize = 3;
 
@@ -252,12 +254,12 @@ TEST_CASE("CsvAdapter: whereExact filter returns matching rows only", "[csv]")
                  "Berlin,3.7\n"
                  "Rome,4.3\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p));
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table              = "dg_test_filter";
     q.pageSize           = 100;
     q.whereExact["city"] = "Berlin";
@@ -273,12 +275,12 @@ TEST_CASE("CsvAdapter: whereExact with no matching rows returns empty", "[csv]")
 {
     TempFile tmp("dg_test_nomatch.csv", "city\nBerlin\nParis\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p));
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table              = "dg_test_nomatch";
     q.pageSize           = 100;
     q.whereExact["city"] = "Tokyo";
@@ -297,12 +299,12 @@ TEST_CASE("CsvAdapter: searchColumn/searchValue does case-insensitive LIKE", "[c
                  "Alice Cooper\n"
                  "Dave\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p));
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table        = "dg_test_search";
     q.pageSize     = 100;
     q.searchColumn = "name";
@@ -319,12 +321,12 @@ TEST_CASE("CsvAdapter: sort ascending", "[csv]")
 {
     TempFile tmp("dg_test_sort_asc.csv", "n\n30\n10\n20\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p));
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table         = "dg_test_sort_asc";
     q.pageSize      = 100;
     q.sortColumn    = "n";
@@ -343,12 +345,12 @@ TEST_CASE("CsvAdapter: sort descending", "[csv]")
 {
     TempFile tmp("dg_test_sort_desc.csv", "n\n30\n10\n20\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p));
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table         = "dg_test_sort_desc";
     q.pageSize      = 100;
     q.sortColumn    = "n";
@@ -365,12 +367,12 @@ TEST_CASE("CsvAdapter: lexicographic sort on text column", "[csv]")
 {
     TempFile tmp("dg_test_sort_lex.csv", "name\nCharlie\nAlice\nBob\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p));
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table         = "dg_test_sort_lex";
     q.pageSize      = 100;
     q.sortColumn    = "name";
@@ -388,12 +390,12 @@ TEST_CASE("CsvAdapter: CountQuery matches total row count", "[csv]")
 {
     TempFile tmp("dg_test_count.csv", "x\n1\n2\n3\n4\n5\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p));
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table = "dg_test_count";
 
     CHECK(adapter.CountQuery(q) == 5);
@@ -403,12 +405,12 @@ TEST_CASE("CsvAdapter: CountQuery respects whereExact filter", "[csv]")
 {
     TempFile tmp("dg_test_count_filter.csv", "kind\napple\nbanana\napple\norange\napple\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p));
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table              = "dg_test_count_filter";
     q.whereExact["kind"] = "apple";
 
@@ -419,8 +421,8 @@ TEST_CASE("CsvAdapter: Execute(sql) returns an error result", "[csv]")
 {
     TempFile tmp("dg_test_nosql.csv", "a\n1\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p));
 
@@ -436,12 +438,12 @@ TEST_CASE("CsvAdapter: quoted fields with embedded commas are parsed correctly",
                  "Alice,\"123 Main St, Apt 4\"\n"
                  "Bob,\"456 Oak Ave\"\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p));
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table    = "dg_test_quoted";
     q.pageSize = 100;
 
@@ -458,12 +460,12 @@ TEST_CASE("CsvAdapter: embedded escaped quotes (double-quote pairs)", "[csv]")
                  "quote\n"
                  "\"say \"\"hello\"\"\"\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p));
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table    = "dg_test_escaped_quotes";
     q.pageSize = 100;
 
@@ -480,8 +482,8 @@ TEST_CASE("CsvAdapter: semicolon delimiter via ConnectionParams", "[csv]")
                  "1;2;3\n"
                  "4;5;6\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     p.csvSeparator     = ';';
     REQUIRE(adapter.Connect(p));
@@ -492,7 +494,7 @@ TEST_CASE("CsvAdapter: semicolon delimiter via ConnectionParams", "[csv]")
     CHECK(cols[1].name == "b");
     CHECK(cols[2].name == "c");
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table           = "dg_test_semicolon";
     q.pageSize        = 100;
     const auto result = adapter.ExecuteQuery(q);
@@ -506,12 +508,12 @@ TEST_CASE("CsvAdapter: empty file (header only, no data rows)", "[csv]")
 {
     TempFile tmp("dg_test_headeronly.csv", "a,b,c\n");
 
-    Adapters::CsvAdapter       adapter;
-    Adapters::ConnectionParams p;
+    CsvAdapter       adapter;
+    ConnectionParams p;
     p.connectionString = tmp.str();
     REQUIRE(adapter.Connect(p));
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table    = "dg_test_headeronly";
     q.pageSize = 100;
 
@@ -527,14 +529,14 @@ TEST_CASE("CsvAdapter: re-connect replaces previous data", "[csv]")
     TempFile tmpA("dg_test_reconnect_a.csv", "x\n1\n2\n");
     TempFile tmpB("dg_test_reconnect_b.csv", "y\n10\n20\n30\n");
 
-    Adapters::CsvAdapter adapter;
+    CsvAdapter adapter;
 
-    Adapters::ConnectionParams pA;
+    ConnectionParams pA;
     pA.connectionString = tmpA.str();
     REQUIRE(adapter.Connect(pA));
     CHECK(adapter.GetColumns("dg_test_reconnect_a").size() == 1);
 
-    Adapters::ConnectionParams pB;
+    ConnectionParams pB;
     pB.connectionString = tmpB.str();
     REQUIRE(adapter.Connect(pB));
 
@@ -542,7 +544,7 @@ TEST_CASE("CsvAdapter: re-connect replaces previous data", "[csv]")
     CHECK(adapter.GetColumns("dg_test_reconnect_a").empty());
     CHECK(adapter.GetColumns("dg_test_reconnect_b").size() == 1);
 
-    Adapters::DataQuery q;
+    DataQuery q;
     q.table    = "dg_test_reconnect_b";
     q.pageSize = 100;
     CHECK(adapter.CountQuery(q) == 3);

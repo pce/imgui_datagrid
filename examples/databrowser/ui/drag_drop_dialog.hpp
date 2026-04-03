@@ -1,14 +1,14 @@
 #pragma once
 #include "adapters/data_source.hpp"
 #include "data_browser.hpp"
-#include "drag_drop.hpp"
+#include "../io/drag_drop.hpp"
 
 #include <filesystem>
 #include <functional>
 #include <string>
 #include <vector>
 
-namespace UI {
+namespace datagrid::ui {
 
 class DropDialogManager
 {
@@ -20,24 +20,24 @@ class DropDialogManager
     std::function<void(const std::string& adapter, const std::string& path, DataBrowser* target)> onReplaceWindow;
 
     /// DB file dragged onto a DB browser window (*.db / *.sqlite3 / *.duckdb).
-    void TriggerDbFileOpen(const FilePayload& fp, DataBrowser* target);
+    void TriggerDbFileOpen(const io::FilePayload& fp, DataBrowser* target);
 
     /// Row from any browser dragged onto a writable DB browser.
     /// targetCols  — result of target->GetSource()->GetColumns(table)
     /// srcColNames / srcValues — decoded from RowPayload::rowData
-    void TriggerRowInsert(const RowPayload&                 rp,
-                          DataBrowser*                      target,
-                          std::vector<Adapters::ColumnInfo> targetCols,
-                          std::vector<std::string>          srcColNames,
-                          std::vector<std::string>          srcValues);
+    void TriggerRowInsert(const io::RowPayload&                    rp,
+                          DataBrowser*                            target,
+                          std::vector<adapters::ColumnInfo>       targetCols,
+                          std::vector<std::string>                srcColNames,
+                          std::vector<std::string>                srcValues);
 
     /// File dragged onto a filesystem browser window.
     /// dstDir — current directory of the target FS browser.
-    void TriggerFsCopyMove(const FilePayload& fp, std::string dstDir, DataBrowser* target);
+    void TriggerFsCopyMove(const io::FilePayload& fp, std::string dstDir, DataBrowser* target);
 
     /// Queryable file (CSV / Parquet / JSON) dragged onto a DuckDB browser —
     /// prompts for a view name then calls duck->ScanFile().
-    void TriggerFileToView(const FilePayload& fp, DataBrowser* target);
+    void TriggerFileToView(const io::FilePayload& fp, DataBrowser* target);
 
     void Render();
 
@@ -56,9 +56,9 @@ class DropDialogManager
 
     DataBrowser* target_ = nullptr;
 
-    FilePayload filePayload_{};
+    io::FilePayload filePayload_{};
 
-    FileDbType  sniffedType_   = FileDbType::Unknown;
+    io::FileDbType  sniffedType_   = io::FileDbType::Unknown;
     bool        openNewWindow_ = true; // true=new window, false=replace
 
     struct ColumnMapping
@@ -72,18 +72,18 @@ class DropDialogManager
         char manualBuf[256] = {};
     };
 
-    RowPayload                 rowPayload_{};
+    io::RowPayload                 rowPayload_{};
     std::vector<ColumnMapping> mappings_;
     std::vector<std::string>   srcColNames_;
     std::vector<std::string>   srcValues_;
     bool                       insertMode_ = true; // true=INSERT, false=UPDATE
     std::string                crudError_;
 
-    FilePayload fsCopyPayload_{};
+    io::FilePayload fsCopyPayload_{};
     std::string fsDstDir_;
     char        fsDstBuf_[1024] = {};
 
-    FilePayload fileToViewPayload_{};
+    io::FilePayload fileToViewPayload_{};
     char        fileToViewNameBuf_[128] = {};
     std::string fileToViewError_;
 
@@ -94,5 +94,5 @@ class DropDialogManager
     void Close();
 };
 
-} // namespace UI
+} // namespace datagrid::ui
 

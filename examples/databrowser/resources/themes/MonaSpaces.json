@@ -1,0 +1,75 @@
+{
+  "id": "MonaSpaces",
+  "title": "Mona Spaces (Floral)",
+  "dark": false,
+  "palette": {
+    "bg0": [
+      0.961,
+      0.937,
+      0.906,
+      1.0
+    ],
+    "bg1": [
+      0.882,
+      0.847,
+      0.808,
+      1.0
+    ],
+    "bg2": [
+      0.827,
+      0.784,
+      0.741,
+      1.0
+    ],
+    "fg0": [
+      0.169,
+      0.118,
+      0.078,
+      1.0
+    ],
+    "fg1": [
+      0.549,
+      0.478,
+      0.427,
+      1.0
+    ],
+    "brd": [
+      0.741,
+      0.69,
+      0.639,
+      1.0
+    ],
+    "acc": [
+      0.42,
+      0.608,
+      0.478,
+      1.0
+    ],
+    "acc2": [
+      0.769,
+      0.482,
+      0.478,
+      1.0
+    ]
+  },
+  "style": {
+    "rounding": 10.0,
+    "item_spacing": 10.0,
+    "frame_padding": 10.0,
+    "font_scale": 1.0
+  },
+  "font": {
+    "main": {
+      "path": "fonts/MonaspaceArgonNF-Regular.otf",
+      "size_px": 15.0
+    },
+    "mono": {
+      "path": "fonts/MonaspaceArgonNF-Regular.otf",
+      "size_px": 15.0
+    },
+    "icon": {
+      "path": "fonts/fa-6-solid-900.otf",
+      "size_px": 14.0
+    }
+  }
+}

@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-namespace UI {
+namespace datagrid::ui {
 
 /// State for the embedded SQL editor widget — one instance per DataBrowser.
 /// Holds only the widget's own persistent data; query results are returned
@@ -16,7 +16,7 @@ struct SqlEditorState
     std::string status;           ///< e.g. "42 rows  (3.1 ms)"
 
     // Populated when the last Execute() succeeded:
-    std::vector<Adapters::ColumnInfo>     resultColumns;
+    std::vector<adapters::ColumnInfo>     resultColumns;
     std::vector<std::vector<std::string>> resultRows;
     float                                 resultMs = 0.0f;
 };
@@ -27,7 +27,7 @@ struct SqlEditorState
 ///
 /// Returns true if a new query was successfully executed; on true the caller
 /// should read state.resultColumns / resultRows / resultMs and update its view.
-bool DrawSqlEditor(SqlEditorState& state, Adapters::IDataSource* source);
+bool DrawSqlEditor(SqlEditorState& state, adapters::IDataSource* source);
 
-} // namespace UI
+} // namespace datagrid::ui
 

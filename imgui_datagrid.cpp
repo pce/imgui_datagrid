@@ -1,5 +1,4 @@
 #include "imgui_datagrid.hpp"
-#include "compat/move_only_function.hpp"
 
 #include <functional>
 #include <cstdio>
@@ -8,9 +7,9 @@
 
 namespace ImGuiExt {
 
-// Deferred callbacks fired after EndTable()
-using DeferredFn = compat::move_only_function<void() noexcept>;
-
+// Lambdas stored here capture only std::function (copyable) and int —
+// std::function<void()> is sufficient; move_only_function adds nothing.
+using DeferredFn = std::function<void()>;
 static void DrawCellDefault(const ColumnDef& col, const std::string& value)
 {
     const float colW  = ImGui::GetContentRegionAvail().x;

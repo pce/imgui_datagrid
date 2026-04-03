@@ -3,7 +3,7 @@
 
 #include "adapters/utils/type_inferrer.hpp"
 
-using namespace TypeInfer;
+using namespace datagrid::adapters::utils;
 
 static std::vector<std::string> repeat(const std::string& v, int n)
 {

@@ -7,14 +7,12 @@
 
 namespace fs = std::filesystem;
 
-namespace Adapters {
+namespace datagrid::adapters {
 
 enum class FsCapability {
     PosixPermissions,
     WindowsAttributes
 };
-
-
 
 struct FilesystemEntry
 {
@@ -22,8 +20,8 @@ struct FilesystemEntry
     std::string kind;                  ///< "dir" | "file" | "symlink" | "other"
     std::string sizeStr;               ///< Human-readable size ("1.4 MB", "—" for dirs)
     std::string modified;              ///< ISO-8601 "YYYY-MM-DD HH:MM"
-    std::string permissions;           ///< POSIX-style "rwxr-xr-x"
     std::string path;                  ///< Absolute path (hidden grid column used in callbacks)
+    std::string permissions;           ///< POSIX-style "rwxr-xr-x"
 
     std::uintmax_t     sizeBytes = 0;  ///< Raw byte count for numeric sorting
     fs::file_time_type modTime   = {}; ///< Raw mtime for chronological sorting
@@ -73,7 +71,7 @@ class FilesystemAdapter final : public IDataSource
     [[nodiscard]] int         CountQuery(const DataQuery& q) const override;
 
     /// Not applicable — always returns an error result.
-    [[nodiscard]] QueryResult Execute(const std::string& sql) const override;
+    [[nodiscard]] datagrid::adapters::QueryResult Execute(const std::string& sql) const override;
 
     void                      SetCurrentPath(const std::string& absolutePath);
     [[nodiscard]] std::string GetCurrentPath() const;
@@ -123,4 +121,4 @@ class FilesystemAdapter final : public IDataSource
     bool                     followSymlinks_ = true;
 };
 
-} // namespace Adapters
+} // namespace datagrid::adapters

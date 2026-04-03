@@ -1,4 +1,6 @@
 #pragma once
+#include "platform.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
@@ -9,7 +11,7 @@
 #include <string_view>
 #include <vector>
 
-namespace UI {
+namespace datagrid::io {
 
 inline constexpr const char* kRowPayloadType  = "DATAGRID_ROW";
 inline constexpr const char* kFilePayloadType = "DATAGRID_FILE";
@@ -62,9 +64,14 @@ enum class FileDbType : uint8_t
     return ext;
 }
 
-/// Sniff the database type: first tries extension, then reads magic bytes.
-///   SQLite magic : first 16 bytes == "SQLite format 3\0"
-///   DuckDB magic : first  4 bytes == 0x44 0x55 0x43 0x4B  ("DUCK")
+/*
+*    / \__                        __      <(o )
+*   (  ( o )                     (oo)       (  )
+*   /|  |\                <----? /||\ ?---->
+*   Sniffs the database type: first tries extension, then reads magic bytes.
+*     SQLite magic : first 16 bytes == "SQLite format 3\0"
+*     DuckDB magic : first  4 bytes == 0x44 0x55 0x43 0x4B  ("DUCK")
+*/
 [[nodiscard]] inline FileDbType SniffDbType(std::string_view path) noexcept
 {
     const std::string ext = FileExtension(path);
@@ -73,18 +80,19 @@ enum class FileDbType : uint8_t
     if (ext == ".duckdb" || ext == ".ddb")
         return FileDbType::DuckDB;
 
-    std::FILE* f = std::fopen(std::string(path).c_str(), "rb");
+    auto f = io::OpenBinaryFile(std::string(path));
     if (!f)
         return FileDbType::Unknown;
 
     char buf[16] = {};
-    const auto got = std::fread(buf, 1, sizeof(buf), f);
-    std::fclose(f);
+    const auto got = std::fread(buf, 1, sizeof(buf), f.get());
 
+    ///   DuckDB magic : first  4 bytes == 0x44 0x55 0x43 0x4B  ("DUCK")
     if (got >= 4 && static_cast<unsigned char>(buf[0]) == 0x44u && static_cast<unsigned char>(buf[1]) == 0x55u &&
         static_cast<unsigned char>(buf[2]) == 0x43u && static_cast<unsigned char>(buf[3]) == 0x4Bu)
         return FileDbType::DuckDB;
 
+    ///   SQLite magic : first 16 bytes == "SQLite format 3\0"
     if (got == 16 && std::memcmp(buf, "SQLite format 3\0", 16) == 0)
         return FileDbType::SQLite;
 
@@ -155,4 +163,4 @@ ParseRowData(std::string_view data) noexcept
     return {std::move(keys), std::move(values)};
 }
 
-} // namespace UI
+} // namespace datagrid

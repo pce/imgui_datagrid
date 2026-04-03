@@ -1,6 +1,6 @@
 #pragma once
 #include "../data_source.hpp"
-#include "../udf_provider.hpp"
+#include "../utils/udf_provider.hpp"
 
 #include <filesystem>
 #include <functional>
@@ -18,7 +18,7 @@ class Vector;
 using scalar_function_t = std::function<void(DataChunk&, ExpressionState&, Vector&)>;
 } // namespace duckdb
 
-namespace Adapters {
+namespace datagrid::adapters {
 
 class DuckDBAdapter final : public IDataSource, public IUDFProvider
 {
@@ -129,4 +129,4 @@ class DuckDBAdapter final : public IDataSource, public IUDFProvider
     std::unique_ptr<Impl> pImpl_;
 };
 
-} // namespace Adapters
+} // namespace datagrid::adapters

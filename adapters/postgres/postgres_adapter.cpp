@@ -12,7 +12,7 @@ namespace {
 const Adapters::RegisterAdapter<Adapters::PostgresAdapter> kPostgresReg{"Postgres"};
 }
 
-namespace Adapters {
+namespace datagrid::adapters {
 
 struct PostgresAdapter::Impl
 {
@@ -391,4 +391,4 @@ PostgresAdapter::DeleteRow(const std::string& table, const std::unordered_map<st
         });
 }
 
-} // namespace Adapters
+} // namespace datagrid::adapters

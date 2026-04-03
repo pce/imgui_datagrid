@@ -1,0 +1,75 @@
+{
+  "id": "NeonSpaces",
+  "title": "Neon Spaces",
+  "dark": true,
+  "palette": {
+    "bg0": [
+      0.027,
+      0.008,
+      0.102,
+      1.0
+    ],
+    "bg1": [
+      0.075,
+      0.039,
+      0.196,
+      1.0
+    ],
+    "bg2": [
+      0.118,
+      0.059,
+      0.278,
+      1.0
+    ],
+    "fg0": [
+      0.91,
+      0.957,
+      1.0,
+      1.0
+    ],
+    "fg1": [
+      0.333,
+      0.4,
+      0.667,
+      1.0
+    ],
+    "brd": [
+      0.471,
+      0.0,
+      0.882,
+      0.7
+    ],
+    "acc": [
+      0.0,
+      0.961,
+      1.0,
+      1.0
+    ],
+    "acc2": [
+      0.31,
+      0.0,
+      0.62,
+      1.0
+    ]
+  },
+  "style": {
+    "rounding": 2.0,
+    "item_spacing": 8.0,
+    "frame_padding": 6.0,
+    "font_scale": 1.0
+  },
+  "font": {
+    "main": {
+      "path": "fonts/MonaspaceArgonNF-Regular.otf",
+      "size_px": 15.0
+    },
+    "mono": {
+      "path": "fonts/MonaspaceArgonNF-Regular.otf",
+      "size_px": 15.0
+    },
+    "icon": {
+      "path": "fonts/fa-6-solid-900.otf",
+      "size_px": 14.0
+    }
+  }
+}

@@ -4,9 +4,9 @@
 
 #include <cstdio>
 
-namespace UI {
+namespace datagrid::ui {
 
-bool DrawSqlEditor(SqlEditorState& state, Adapters::IDataSource* source)
+bool DrawSqlEditor(SqlEditorState& state, adapters::IDataSource* source)
 {
     if (!state.visible)
         return false;
@@ -34,7 +34,7 @@ bool DrawSqlEditor(SqlEditorState& state, Adapters::IDataSource* source)
         state.error.clear();
         state.status.clear();
 
-        const Adapters::QueryResult res = source->Execute(state.buf);
+        const adapters::QueryResult res = source->Execute(state.buf);
 
         if (!res.ok()) {
             state.error = res.error;
@@ -70,5 +70,5 @@ bool DrawSqlEditor(SqlEditorState& state, Adapters::IDataSource* source)
     return executed;
 }
 
-} // namespace UI
+} // namespace datagrid::ui
 
