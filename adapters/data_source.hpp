@@ -26,8 +26,26 @@ struct ColumnInfo
     ///   "image_blob"   — cell value contains raw image bytes (e.g. SQLite BLOB)
     /// Adapters set this in GetColumns(); the widget layer reads it via
     /// ColumnDef::semanticHint after BuildColumns() copies it across.
+    ///
+    /// Semantic role values (see column_role:: constants below) tell DataBrowser
+    /// which column carries path / kind information, regardless of its name.
     std::string displayHint;
 };
+
+/// Semantic role tags for ColumnInfo::displayHint.
+///
+/// Set these on ColumnInfo so that DataBrowser can locate the right column for
+/// open / launch / byte-inspect actions even when the column is not literally
+/// named "path" or "kind" (e.g. a DB view with a "filepath" or "location" column).
+namespace column_role {
+    /// Cell value is an absolute or relative filesystem path.
+    /// DataBrowser uses this column for Open / Launch / Inspect-Bytes actions.
+    inline constexpr const char* kFilePath  = "filepath";
+
+    /// Cell value is an entry-kind string: "file", "dir", "symlink", "other".
+    /// DataBrowser uses this to decide which action buttons to enable.
+    inline constexpr const char* kEntryKind = "entry_kind";
+} // namespace column_role
 
 struct TableInfo
 {

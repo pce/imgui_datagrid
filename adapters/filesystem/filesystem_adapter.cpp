@@ -143,12 +143,12 @@ std::vector<ColumnInfo> FilesystemAdapter::GetColumns(const std::string& /*table
     // Callbacks (e.g. in app.cpp) rely on row[5] == absolute path.
     std::vector<ColumnInfo> cols = {
         {"name",     "TEXT", false, false},
-        {"kind",     "TEXT", false, false},
+        {"kind",     "TEXT", false, false, column_role::kEntryKind},
         {"size",     "TEXT", true,  false},
         {"modified", "TEXT", true,  false},
     };
     cols.push_back({std::string{io::Platform::kPermColName}, "TEXT", true,  false});
-    cols.push_back({"path", "TEXT", false, false});
+    cols.push_back({"path", "TEXT", false, false, column_role::kFilePath});
     return cols;
 }
 
@@ -387,7 +387,7 @@ QueryResult FilesystemAdapter::Execute(const std::string& sql) const
     resolved = patchPath(resolved, "FROM .", currentPath_.string());
     resolved = patchPath(resolved, "FROM '.'", currentPath_.string());
 
-    auto q = FluentQuery::from_sql(resolved);
+    auto q = LinQuery::from_sql(resolved);
     if (!q) {
         QueryResult r;
         r.error = "SQL parse error: " + q.error();

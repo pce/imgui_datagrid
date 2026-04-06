@@ -4,10 +4,10 @@
 #include <array>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace datagrid::ui {
 
-// ── ThemeStyle ────────────────────────────────────────────────────────────────
 //  One enumerator per built-in theme.  The integer value is also the array
 //  index used throughout Theme, ThemeCustomizer, and Settings.
 //
@@ -59,8 +59,9 @@ inline constexpr int kThemeCount = 16;
 /// Reverse lookup — returns SolarizedDark for unrecognised ids.
 [[nodiscard]] ThemeStyle theme_from_id(std::string_view id) noexcept;
 
-// ── StyleParams ───────────────────────────────────────────────────────────────
-//  Used by both ThemeCustomizer (live editing) and ThemeSettings (persistence).
+/// List all .ttf/.otf fonts in resources/fonts/ (RFS-relative paths like "fonts/Hack-Regular.ttf").
+[[nodiscard]] std::vector<std::string> enumerate_fonts() noexcept;
+
 
 struct StyleParams {
     float rounding      = 4.f;   // Window/Frame/Child/Popup/Tab rounding
@@ -69,7 +70,6 @@ struct StyleParams {
     float font_scale    = 1.f;   // reserved — not applied at runtime yet
 };
 
-// ── FontConfig ────────────────────────────────────────────────────────────────
 
 struct FontConfig {
     std::string path;            ///< Rfs-relative path; empty = theme default
@@ -82,22 +82,24 @@ struct FontConfig {
 /// Built-in icon font for each theme.
 [[nodiscard]] FontConfig default_icon_font(ThemeStyle t) noexcept;
 
-// ── ThemeSettings ─────────────────────────────────────────────────────────────
 //  The slice of theme state persisted to settings.json.
 
 struct ThemeSettings {
-    ThemeStyle  active    = ThemeStyle::SolarizedDark;
-    StyleParams style;       ///< user-customised style for active theme
-    FontConfig  main_font;   ///< override; empty = use default_main_font(active)
-    FontConfig  icon_font;   ///< override; empty = use default_icon_font(active)
+    ThemeStyle  active      = ThemeStyle::SolarizedDark;
+    StyleParams style;      ///< user-customised style for active theme
+    FontConfig  main_font;  ///< override; empty = use default_main_font(active)
+    FontConfig  icon_font;  ///< override; empty = use default_icon_font(active)
+    FontConfig  hex_font;   ///< override for HexViewDialog; empty = code_font
 };
 
-// ── Theme ─────────────────────────────────────────────────────────────────────
 
 class Theme {
 public:
     /// Updated by ApplyColorTheme(); read by TextArea::SetCodeFont().
     ImFont* codeFont = nullptr;
+
+    /// Hexview font (nullptr = use codeFont).
+    ImFont* hexFont = nullptr;
 
     /// Store DPI scale and apply built-in per-theme spacing for the current theme.
     void ApplyImGuiStyle(float dpiScale = 1.0f);

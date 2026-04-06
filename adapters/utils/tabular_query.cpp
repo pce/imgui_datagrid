@@ -230,44 +230,29 @@ class Lexer
 
     static TokKind keyword(const std::string& s)
     {
+        static const std::unordered_map<std::string, TokKind> kMap = {
+            {"select", TokKind::kSelect},
+            {"from", TokKind::kFrom},
+            {"where", TokKind::kWhere},
+            {"order", TokKind::kOrder},
+            {"by", TokKind::kBy},
+            {"limit", TokKind::kLimit},
+            {"offset", TokKind::kOffset},
+            {"recursive", TokKind::kRecursive},
+            {"and", TokKind::kAnd},
+            {"or", TokKind::kOr},
+            {"not", TokKind::kNot},
+            {"like", TokKind::kLike},
+            {"glob", TokKind::kGlob},
+            {"ilike", TokKind::kIlike},
+            {"between", TokKind::kBetween},
+            {"in", TokKind::kIn},
+            {"asc", TokKind::kAsc},
+            {"desc", TokKind::kDesc},
+        };
         const std::string lo = ToLower(s);
-        if (lo == "select")
-            return TokKind::kSelect;
-        if (lo == "from")
-            return TokKind::kFrom;
-        if (lo == "where")
-            return TokKind::kWhere;
-        if (lo == "order")
-            return TokKind::kOrder;
-        if (lo == "by")
-            return TokKind::kBy;
-        if (lo == "limit")
-            return TokKind::kLimit;
-        if (lo == "offset")
-            return TokKind::kOffset;
-        if (lo == "recursive")
-            return TokKind::kRecursive;
-        if (lo == "and")
-            return TokKind::kAnd;
-        if (lo == "or")
-            return TokKind::kOr;
-        if (lo == "not")
-            return TokKind::kNot;
-        if (lo == "like")
-            return TokKind::kLike;
-        if (lo == "glob")
-            return TokKind::kGlob;
-        if (lo == "ilike")
-            return TokKind::kIlike;
-        if (lo == "between")
-            return TokKind::kBetween;
-        if (lo == "in")
-            return TokKind::kIn;
-        if (lo == "asc")
-            return TokKind::kAsc;
-        if (lo == "desc")
-            return TokKind::kDesc;
-        return TokKind::kIdent;
+        auto it = kMap.find(lo);
+        return (it != kMap.end()) ? it->second : TokKind::kIdent;
     }
 
     std::string_view src_;
@@ -512,26 +497,23 @@ class Parser
         } catch (...) {
         }
 
-        if (op == "=" || op == "==")
-            n.atom.op = PredOp::Eq;
-        else if (op == "!=" || op == "<>")
-            n.atom.op = PredOp::Ne;
-        else if (op == "<")
-            n.atom.op = PredOp::Lt;
-        else if (op == ">")
-            n.atom.op = PredOp::Gt;
-        else if (op == "<=")
-            n.atom.op = PredOp::Le;
-        else if (op == ">=")
-            n.atom.op = PredOp::Ge;
-        else if (op == "like")
-            n.atom.op = PredOp::Like;
-        else if (op == "ilike")
-            n.atom.op = PredOp::ILike;
-        else if (op == "glob")
-            n.atom.op = PredOp::Glob;
-        else
+        // Map operators to PredOp values
+        static const std::unordered_map<std::string, PredOp> kOpMap = {
+            {"=", PredOp::Eq},    {"==", PredOp::Eq},
+            {"!=", PredOp::Ne},   {"<>", PredOp::Ne},
+            {"<", PredOp::Lt},    {">", PredOp::Gt},
+            {"<=", PredOp::Le},   {">=", PredOp::Ge},
+            {"like", PredOp::Like},
+            {"ilike", PredOp::ILike},
+            {"glob", PredOp::Glob},
+        };
+
+        auto it = kOpMap.find(op);
+        if (it != kOpMap.end()) {
+            n.atom.op = it->second;
+        } else {
             return fail(std::format("Unknown operator '{}'", op));
+        }
 
         return n;
     }

@@ -12,8 +12,35 @@ namespace ImGuiExt {
 using DeferredFn = std::function<void()>;
 static void DrawCellDefault(const ColumnDef& col, const std::string& value)
 {
-    const float colW  = ImGui::GetContentRegionAvail().x;
-    const float textW = ImGui::CalcTextSize(value.c_str()).x;
+    const float colW = ImGui::GetContentRegionAvail().x;
+
+    // ── Single-line normalisation ─────────────────────────────────────────────
+    // Multi-line values (containing \n) expand the row height.
+    // Show only the first line in the cell; the full value appears in the tooltip.
+    bool        truncated = false;
+    std::string display;
+    {
+        const auto nlPos = value.find('\n');
+        if (nlPos != std::string::npos) {
+            // Strip trailing \r for Windows-style CRLF
+            size_t end = nlPos;
+            if (end > 0 && value[end - 1] == '\r') --end;
+            display   = value.substr(0, end);
+            truncated = true;
+        } else {
+            display = value;
+        }
+        // Hard-cap to avoid O(n) CalcTextSize on multi-KB blobs
+        constexpr size_t kMaxDisplay = 512;
+        if (display.size() > kMaxDisplay) {
+            display.resize(kMaxDisplay);
+            truncated = true;
+        }
+        if (truncated)
+            display += " \xe2\x80\xa6"; // " …"
+    }
+
+    const float textW = ImGui::CalcTextSize(display.c_str()).x;
 
     if (col.type == ColumnType::Number || col.type == ColumnType::Date) {
         const float offset = colW - textW;
@@ -21,11 +48,23 @@ static void DrawCellDefault(const ColumnDef& col, const std::string& value)
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offset);
     }
 
-    ImGui::TextUnformatted(value.c_str());
+    // Clip to column width: prevents wide single-line text from overflowing into
+    // the adjacent column visually.  The clip rect intersects with the table's
+    // own clip rect so it never bleeds outside the table.
+    {
+        const ImVec2 p0 = ImGui::GetCursorScreenPos();
+        const ImVec2 p1 = {p0.x + colW + ImGui::GetStyle().CellPadding.x,
+                           p0.y + ImGui::GetTextLineHeightWithSpacing()};
+        ImGui::PushClipRect(p0, p1, /*intersect_with_current=*/true);
+        ImGui::TextUnformatted(display.c_str());
+        ImGui::PopClipRect();
+    }
 
-    if (textW > colW && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
+    // Tooltip: always shown for truncated cells; shown on overflow for single-line.
+    const bool needsTooltip = truncated || (textW > colW);
+    if (needsTooltip && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
         ImGui::BeginTooltip();
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 40.0f);
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 50.0f);
         ImGui::TextUnformatted(value.c_str());
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();

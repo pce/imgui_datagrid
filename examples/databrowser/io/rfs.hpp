@@ -31,7 +31,7 @@ namespace datagrid::io {
         return (set & flag) != Perms::None;
     }
 
-    // ── MountStatus ───────────────────────────────────────────────────────────
+    // MountStatus
     //
     //  Returned by Rfs::mount() so callers know exactly what happened.
     //
@@ -64,7 +64,7 @@ namespace datagrid::io {
         Perms                 perms_;
     };
 
-    // ── Rfs ───────────────────────────────────────────────────────────────────
+    //  Rfs
     //
     //  Tiny virtual filesystem with named mount points and RWX permissions.
     //  Front-insert vector: O(n) scan beats any tree for the expected ≤10 mounts
@@ -82,7 +82,6 @@ namespace datagrid::io {
     class Rfs {
         std::vector<Mount> mounts_;
         mutable std::mutex mutex_;
-
         // Returns the perms of the longest-prefix ancestor of `root` (if any).
         // Must be called with mutex_ held.
         [[nodiscard]] const Mount* find_parent_locked(const std::filesystem::path& root) const noexcept {

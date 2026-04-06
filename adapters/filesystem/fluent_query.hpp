@@ -96,6 +96,7 @@ struct EntryPred
 [[nodiscard]] EntryPred size_le(std::uintmax_t n);
 [[nodiscard]] EntryPred size_between(std::uintmax_t lo, std::uintmax_t hi);
 
+
 class FluentQuery
 {
   public:

@@ -90,7 +90,8 @@ class DuckDBAdapter final : public IDataSource, public IUDFProvider
     /// For simple lambdas prefer the portable RegisterScalar<R, Args...>
     /// from IUDFProvider — it builds the trampoline automatically.
     template<typename R, typename... Args>
-    [[nodiscard]] std::expected<void, Error> RegisterVectorized(std::string_view name, duckdb::scalar_function_t fn)
+    [[nodiscard]]
+    std::expected<void, Error> RegisterVectorized(std::string_view name, duckdb::scalar_function_t fn)
     {
         return RegisterVectorizedImpl(name, std::move(fn), {ScalarTypeOf<Args>...}, ScalarTypeOf<R>);
     }
@@ -109,18 +110,22 @@ class DuckDBAdapter final : public IDataSource, public IUDFProvider
 
     /// Return the list of view names that were registered via ScanFile /
     /// ScanDirectory (not regular DuckDB tables).
-    [[nodiscard]] std::vector<std::string> GetFileSources() const;
+    [[nodiscard]]
+    std::vector<std::string> GetFileSources() const;
 
-    [[nodiscard]] static bool IsQueryableExtension(std::string_view ext) noexcept;
+    [[nodiscard]]
+    static bool IsQueryableExtension(std::string_view ext) noexcept;
 
   protected:
-    [[nodiscard]] std::expected<void, Error> RegisterScalarImpl(ScalarUDFDesc desc) override;
+    [[nodiscard]]
+    std::expected<void, Error> RegisterScalarImpl(ScalarUDFDesc desc) override;
 
   private:
     // Keeps duckdb.hpp out of the public header; the template above
     // forwards here after capturing the compile-time type information as
     // runtime ScalarType lists.
-    [[nodiscard]] std::expected<void, Error> RegisterVectorizedImpl(std::string_view          name,
+    [[nodiscard]]
+    std::expected<void, Error> RegisterVectorizedImpl(std::string_view          name,
                                                                     duckdb::scalar_function_t fn,
                                                                     std::vector<ScalarType>   argTypes,
                                                                     ScalarType                returnType);

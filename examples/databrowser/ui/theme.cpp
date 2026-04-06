@@ -1,6 +1,10 @@
 #include "theme.hpp"
+
+#include <algorithm>
+
 #include "imgui.h"
 
+#include <filesystem>
 
 namespace datagrid::ui {
     // ── theme_from_id ─────────────────────────────────────────────────────────────
@@ -50,9 +54,9 @@ namespace datagrid::ui {
                 return { "fonts/JetBrainsMono-Thin.ttf", 14.f };
             case DawnBringerLight:
             case DawnBringerDark:
-                return { "fonts/Hack-Regular.ttf", 14.f };
+                return { "fonts/Roboto-Medium.ttf", 14.f };
             default:
-                return { "fonts/Roboto-Medium.ttf", 15.f };
+                return { "fonts/JetBrainsMono-Thin.ttf", 15.f };
         }
     }
 
@@ -141,9 +145,27 @@ namespace datagrid::ui {
         current_ = theme;
         ApplyThemeStyle_(theme);
 
-        // Color assignment is delegated to ThemeCustomizer::palette_to_imgui
-        // (called by ThemeCustomizer::apply).  A bare Theme::ApplyColorTheme only
-        // handles fonts and layout — the palette comes from the customizer.
     }
 
+    std::vector<std::string> datagrid::ui::enumerate_fonts() noexcept
+    {
+        std::vector<std::string> fonts;
+        namespace fs = std::filesystem;
+        std::error_code ec;
+
+        // Look in resources/fonts/ relative to executable
+        const fs::path fontsDir = fs::current_path(ec) / "resources" / "fonts";
+        if (ec || !fs::is_directory(fontsDir, ec)) return fonts;
+
+        for (const auto& entry : fs::directory_iterator(fontsDir, ec)) {
+            if (ec) continue;
+            const auto ext = entry.path().extension().string();
+            if (ext == ".ttf" || ext == ".otf") {
+                // Store as "fonts/Hack-Regular.ttf" for RFS compatibility
+                fonts.push_back("fonts/" + entry.path().filename().string());
+            }
+        }
+        std::sort(fonts.begin(), fonts.end());
+        return fonts;
+    }
 } // namespace datagrid::ui

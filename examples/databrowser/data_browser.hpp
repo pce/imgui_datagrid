@@ -116,12 +116,46 @@ class DataBrowser
     /// Read-only access to the rows currently displayed (current page).
     [[nodiscard]] const std::vector<std::vector<std::string>>& GetCurrentRows() const { return rows; }
 
-    /// Zero-based index of the column whose key matches `key`, or -1 if not found.
+    /// Zero-based index of the column whose key matches `key` in the *display*
+    /// column array (post-customizer).  Use for UI iteration only.  Returns -1 if
+    /// not found.
     [[nodiscard]] int GetColumnIndex(const std::string& key) const
     {
         for (int i = 0; i < static_cast<int>(columns.size()); ++i)
             if (columns[i].key == key) return i;
         return -1;
+    }
+
+    /// Zero-based index of the column whose key matches `key` in the **raw adapter
+    /// row data** (pre-customizer, pre-filter).  Use this whenever you index into
+    /// a `row` vector returned by a RowCallback or GetCurrentRows().
+    ///
+    /// Unlike GetColumnIndex(), this is stable even when a ColumnCustomizer removes
+    /// or reorders display columns.  Returns -1 if the adapter has no such column.
+    [[nodiscard]] int GetRawColumnIndex(const std::string& key) const
+    {
+        for (int i = 0; i < static_cast<int>(rawColumnKeys_.size()); ++i)
+            if (rawColumnKeys_[i] == key) return i;
+        return -1;
+    }
+
+    /// Like GetRawColumnIndex() but matches by the semantic role tag stored in
+    /// ColumnInfo::displayHint (e.g. adapters::column_role::kFilePath).
+    /// Use when the column may have any name across different adapters.
+    [[nodiscard]] int GetRawColumnIndexByRole(const std::string& role) const
+    {
+        for (int i = 0; i < static_cast<int>(rawColumnRoles_.size()); ++i)
+            if (rawColumnRoles_[i] == role) return i;
+        return -1;
+    }
+
+    /// Convenience: tries GetRawColumnIndexByRole(role) first; falls back to
+    /// GetRawColumnIndex(key).  Returns -1 only when both fail.
+    [[nodiscard]] int ResolveRawColumnIndex(const std::string& key,
+                                            const std::string& role) const
+    {
+        const int byRole = GetRawColumnIndexByRole(role);
+        return (byRole >= 0) ? byRole : GetRawColumnIndex(key);
     }
 
     [[nodiscard]] std::string CurrentTable() const;
@@ -150,8 +184,10 @@ class DataBrowser
     void DrawSidebarContent(); ///< Shared by sidebar panel and phone overlay
     void DrawPhoneOverlay();   ///< Full-screen sidebar overlay for Phone layout
     void DrawMainContent();
+    void DrawRowActionBar();   ///< Centered Open/Launch/Browse/Bytes buttons for the selected row
     void RenderInsertPopup();
     void RenderDeleteConfirm();
+    void RenderCellTextPopup(); ///< Full-value viewer modal (opened from context menu)
 
     void LoadSchema();                              ///< Load tables from adapter; refresh sidebar list
     void SelectTable(const std::string& tableName); ///< Rebuild columns, reset pagination
@@ -165,6 +201,15 @@ class DataBrowser
 
     std::vector<ImGuiExt::ColumnDef>      columns;
     std::vector<std::vector<std::string>> rows;
+    /// Column keys in the exact order the adapter reported them — i.e. the order
+    /// matching each cell in a row vector.  Populated in BuildColumns() *before*
+    /// columnCustomizer runs, so it is always aligned with raw row data even when
+    /// the customizer removes or reorders display columns.
+    std::vector<std::string>              rawColumnKeys_;
+    /// Parallel to rawColumnKeys_: the ColumnInfo::displayHint (role tag) for each
+    /// raw column.  Used by GetRawColumnIndexByRole() to find path/kind columns by
+    /// semantic role rather than literal name — works for any adapter.
+    std::vector<std::string>              rawColumnRoles_;
     ImGuiExt::DataGridState               gridState;
 
     std::vector<adapters::TableInfo> tables;
@@ -194,8 +239,13 @@ class DataBrowser
     bool        focused_  = false; ///< True when this DataBrowser window had focus last frame
     std::string editError_;        ///< Last UpdateRow error message, if any
 
-    bool showInsertPopup_   = false;
-    bool showDeleteConfirm_ = false;
+    bool        showInsertPopup_   = false;
+    bool        showDeleteConfirm_ = false;
+
+    // Triggered from the context menu; rendered as a modal the following frame.
+    bool        showCellTextPopup_ = false;
+    std::string cellPopupTitle_;   ///< "column  —  table  ·  row N"
+    std::string cellPopupText_;    ///< Raw full value (may be multi-MB; shown in scrollable editor)
     struct InsertField
     {
         char buf[256] = {};

@@ -50,7 +50,8 @@ concept DuckDBResultLike = requires(R& r, duckdb::idx_t i) {
 /// Single-quote a SQL string literal, escaping embedded single-quotes.
 /// Defined for completeness / direct-embed scenarios; parameterised queries
 /// are preferred and used everywhere internally.
-[[maybe_unused]] [[nodiscard]] static std::string EscapeStr(const std::string& val)
+[[maybe_unused]] [[nodiscard]]
+    static std::string EscapeStr(const std::string& val)
 {
     std::string out;
     out.reserve(val.size() + 2);

@@ -34,7 +34,6 @@ struct BlobInfo
 [[nodiscard]] BlobInfo AnalyseBlob(std::span<const std::byte> data,
                                    std::size_t                fullSize = 0) noexcept;
 
-// ─────────────────────────────────────────────────────────────────────────────
 /// Stateful hex-view modal dialog.  Embed one per owner; call Open*() to arm,
 /// then Render() every frame — it manages its own ImGui popup lifecycle.
 class HexViewDialog

@@ -268,6 +268,10 @@ bool ThemeCustomizer::Render(Theme& theme, ThemeStyle& active) {
         changed = true;
     }
 
+    // Fonts (placeholder for future font configuration UI)
+    // Future: add font selection UI for hex viewer / code font
+    ImGui::TextDisabled("fonts (configured in theme JSON)");
+
     // Buttons
     ImGui::Spacing();
     ImGui::Separator();
@@ -552,7 +556,7 @@ std::array<StyleParams, kThemeCount> ThemeCustomizer::builtin_styles() noexcept 
     return s;
 }
 
-// ── builtin_fonts ─────────────────────────────────────────────────────────────
+//  builtin_fonts
 //
 //  Default font pair for each theme.  These are the same fonts that
 //  default_main_font() / default_icon_font() return, pre-packaged as a
@@ -581,25 +585,25 @@ std::array<ThemeFonts, kThemeCount> ThemeCustomizer::builtin_fonts() noexcept {
     // Monaspace / NeonSpaces: same font for both UI and code
     for (int i : {int(MonaSpaces), int(NeonSpaces)}) {
         f[i].ui   = { "fonts/MonaspaceArgonNF-Regular.otf", 15.f };
-        f[i].mono = f[i].ui;
+        f[i].mono = { "fonts/JetBrainsMono-Thin.ttf", 14.f };
         f[i].icon = kIconDefault;
     }
-    // DawnBringer16: Krypton for both
+    // DawnBringer16: Krypton
     for (int i : {int(DawnBringer16Dark), int(DawnBringer16Light)}) {
         f[i].ui   = { "fonts/MonaspaceKryptonNF-WideLight.otf", 13.f };
-        f[i].mono = f[i].ui;
+        f[i].mono  = { "fonts/JetBrainsMono-Thin.ttf", 14.f };
         f[i].icon = kIconDefault;
     }
     // MonoLight/MonoDark: JetBrains for both
     for (int i : {int(MonoLight), int(MonoDark)}) {
-        f[i].ui   = { "fonts/JetBrainsMono-Thin.ttf", 14.f };
-        f[i].mono = f[i].ui;
+        f[i].ui   = { "fonts/visitor1.ttf", 14.f };
+        f[i].mono  = { "fonts/JetBrainsMono-Thin.ttf", 14.f };
         f[i].icon = kIconDefault;
     }
     // DawnBringer: Hack for both
     for (int i : {int(DawnBringerLight), int(DawnBringerDark)}) {
-        f[i].ui   = { "fonts/Hack-Regular.ttf", 14.f };
-        f[i].mono = f[i].ui;
+        f[i].ui   = { "fonts/MonaspaceKryptonNF-WideLight.otf", 13.f };
+        f[i].mono  = { "fonts/JetBrainsMono-Thin.ttf", 14.f };
         f[i].icon = kIconDefault;
     }
     return f;

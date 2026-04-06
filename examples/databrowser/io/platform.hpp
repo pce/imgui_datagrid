@@ -5,7 +5,6 @@
 #include <string>
 #include <string_view>
 
-// Windows.h — guarded to avoid polluting non-Windows TUs.
 #if defined(_WIN32)
 #  ifndef WIN32_LEAN_AND_MEAN
 #    define WIN32_LEAN_AND_MEAN
@@ -20,11 +19,7 @@
 /// Prefer `if constexpr` over raw `#ifdef` for branching so all branches are
 /// syntax-checked on every platform.  Use `#if` only for platform-specific
 /// *includes* (e.g. <windows.h>), isolated at the top of each TU.
-
-
-// ──────────────────────────────────────────────────────────────────────────────
 // I/O utilities
-// ──────────────────────────────────────────────────────────────────────────────
 
 namespace fs = std::filesystem;
 

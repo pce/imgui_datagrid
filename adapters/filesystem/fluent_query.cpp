@@ -147,12 +147,12 @@ std::vector<std::string> EntryToRow(const FilesystemEntry& e)
 std::vector<ColumnInfo> StandardColumns()
 {
     return {
-        {"name",       "TEXT", false, false},
-        {"kind",       "TEXT", false, false},
-        {"size",       "TEXT", true,  false},
-        {"modified",   "TEXT", true,  false},
-        {std::string{io::Platform::kPermColName}, "TEXT", true, false},
-        {"path",       "TEXT", false, false},
+        {"name",       "TEXT", false, false, {}},
+        {"kind",       "TEXT", false, false, column_role::kEntryKind},
+        {"size",       "TEXT", true,  false, {}},
+        {"modified",   "TEXT", true,  false, {}},
+        {std::string{io::Platform::kPermColName}, "TEXT", true, false, {}},
+        {"path",       "TEXT", false, false, column_role::kFilePath},
     };
 }
 
@@ -551,7 +551,7 @@ QueryResult FluentQuery::execute() const
         // Handle virtual columns: extension, stem
         for (const auto& col : selectedCols_) {
             if (col == "extension" || col == "stem")
-                kept.push_back({col, "TEXT", true, false});
+                kept.push_back({col, "TEXT", true, false, {}});
         }
         result.columns = std::move(kept);
     }

@@ -201,7 +201,6 @@ void HexViewDialog::Render()
     ImGui::Separator();
     ImGui::Spacing();
 
-    // ── info panel ────────────────────────────────────────────────────────────
     constexpr ImGuiTableFlags kInfoFlags = ImGuiTableFlags_SizingFixedFit |
                                            ImGuiTableFlags_BordersInnerV;
     if (ImGui::BeginTable("##hexinfo", 2, kInfoFlags)) {
@@ -239,7 +238,6 @@ void HexViewDialog::Render()
     ImGui::Separator();
     ImGui::Spacing();
 
-    // ── dispatch ──────────────────────────────────────────────────────────────
     switch (mode_) {
         case HexViewMode::Inspector: RenderInspector(); break;
         case HexViewMode::TextHex:   RenderTextHex();   break;
@@ -249,7 +247,6 @@ void HexViewDialog::Render()
     ImGui::EndPopup();
 }
 
-// ─── RenderStandard ──────────────────────────────────────────────────────────
 // Fast text-line renderer: XXXXXXXX  XX XX... |ASCII|
 // Virtual-scrolled via ImGuiListClipper.
 void HexViewDialog::RenderStandard()
@@ -260,7 +257,9 @@ void HexViewDialog::RenderStandard()
 
     const float footerH = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
 
-    ImGui::PushFont(font_);   // nullptr = ImGui default (always monospace-like)
+    // Use font: prefer theme hex font, fall back to code font, then ImGui default
+    ImFont* renderFont = font_;
+    ImGui::PushFont(renderFont);
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.05f, 0.05f, 0.06f, 1.0f));
     ImGui::BeginChild("##hexstd",
                       ImVec2(0.0f, ImGui::GetContentRegionAvail().y - footerH),
@@ -334,7 +333,6 @@ void HexViewDialog::RenderStandard()
     }
 }
 
-// ─── RenderInspector ─────────────────────────────────────────────────────────
 // Interactive per-byte grid: 4-column table (Addr | Hex 0-7 | Hex 8-15 | ASCII).
 // Each hex cell is a Selectable; background tinted by byte class.
 // Hover tooltip shows offset/hex/dec/char. Click to select; status bar shows selection.
@@ -374,11 +372,11 @@ void HexViewDialog::RenderInspector()
                 const int off = row * kBPR;
                 ImGui::TableNextRow();
 
-                // ── Addr ────────────────────────────────────────────────────
+                // Addr
                 ImGui::TableSetColumnIndex(0);
                 ImGui::TextDisabled("%08X", off);
 
-                // ── Two groups of 8 hex bytes ────────────────────────────────
+                // Two groups of 8 hex bytes
                 for (int grp = 0; grp < 2; ++grp) {
                     ImGui::TableSetColumnIndex(grp + 1);
                     for (int i = grp * 8, iend = grp * 8 + 8; i < iend; ++i) {
@@ -439,7 +437,7 @@ void HexViewDialog::RenderInspector()
                     }
                 }
 
-                // ── ASCII ───────────────────────────────────────────────────
+                // ASCII
                 ImGui::TableSetColumnIndex(3);
                 for (int i = 0; i < kBPR; ++i) {
                     const int idx = off + i;
@@ -470,7 +468,7 @@ void HexViewDialog::RenderInspector()
     ImGui::PopStyleColor();
     ImGui::PopFont();
 
-    // ── status bar ────────────────────────────────────────────────────────────
+    //  status bar
     ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
 
     if (selected_ >= 0 && selected_ < total) {
@@ -491,7 +489,6 @@ void HexViewDialog::RenderInspector()
     }
 }
 
-// ─── RenderTextHex ───────────────────────────────────────────────────────────
 // 64 chars per row, printable shown as-is, non-printable as UTF-8 middle dot ·
 void HexViewDialog::RenderTextHex()
 {

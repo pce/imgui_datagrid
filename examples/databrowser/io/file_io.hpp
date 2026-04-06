@@ -1,5 +1,6 @@
 #pragma once
-// io/file_io.hpp — C-level file helpers that avoid std::ifstream/std::ofstream.
+// io/file_io.hpp — C-level file helpers that avoid std::ifstream/std::ofstream
+// with toolchain they should ne issue>?
 #include <cstdio>
 #include <cstring>
 #include <filesystem>

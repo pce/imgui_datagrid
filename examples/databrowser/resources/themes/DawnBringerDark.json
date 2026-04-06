@@ -60,11 +60,11 @@
   },
   "font": {
     "main": {
-      "path": "fonts/Hack-Regular.ttf",
+      "path": "fonts/Karla-Regular.ttf",
       "size_px": 14.0
     },
     "mono": {
-      "path": "fonts/Hack-Regular.ttf",
+      "path": "fonts/JetBrainsMono-Thin.ttf",
       "size_px": 14.0
     },
     "icon": {

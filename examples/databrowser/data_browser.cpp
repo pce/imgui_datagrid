@@ -212,10 +212,22 @@ void DataBrowser::SelectTable(const std::string& tableName)
 void DataBrowser::BuildColumns()
 {
     columns.clear();
+    rawColumnKeys_.clear();
+    rawColumnRoles_.clear();
     if (!IsConnected() || query.table.empty())
         return;
 
     const auto infos = source->GetColumns(query.table);
+
+    // Capture the raw adapter column order AND roles BEFORE the customizer runs.
+    // Every cell in a row vector is indexed by this order regardless of what
+    // the customizer does to the display `columns` array.
+    rawColumnKeys_.reserve(infos.size());
+    rawColumnRoles_.reserve(infos.size());
+    for (const auto& info : infos) {
+        rawColumnKeys_.push_back(info.name);
+        rawColumnRoles_.push_back(info.displayHint);
+    }
 
     columns.reserve(infos.size());
     for (const auto& info : infos) {
@@ -339,6 +351,7 @@ void DataBrowser::Render()
 
     RenderInsertPopup();
     RenderDeleteConfirm();
+    RenderCellTextPopup();
     hexView_.Render();   // must be inside Begin/End: OpenPopup + BeginPopupModal share the same window context
 
     ImGui::End();
@@ -700,19 +713,79 @@ void DataBrowser::RenderDeleteConfirm()
     ImGui::EndPopup();
 }
 
+void DataBrowser::RenderCellTextPopup()
+{
+    // One-frame deferred open: the flag is set inside a context-menu popup,
+    // so we must call OpenPopup *after* that popup has closed (next frame).
+    if (showCellTextPopup_) {
+        ImGui::OpenPopup("##celltextview");
+        showCellTextPopup_ = false;
+    }
+
+    const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(680.0f, 460.0f), ImGuiCond_Appearing);
+
+    if (ImGui::BeginPopupModal("##celltextview", nullptr,
+                               ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove)) {
+        // ── Header ────────────────────────────────────────────────────────────
+        ImGui::TextDisabled("%s", cellPopupTitle_.c_str());
+        ImGui::SameLine(ImGui::GetContentRegionAvail().x - 90.0f);
+
+        if (ImGui::Button("Copy")) {
+            ImGui::SetClipboardText(cellPopupText_.c_str());
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Close") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::Separator();
+
+        // ── Stats ─────────────────────────────────────────────────────────────
+        const size_t nChars = cellPopupText_.size();
+        const size_t nLines = static_cast<size_t>(
+            std::count(cellPopupText_.begin(), cellPopupText_.end(), '\n')) + 1;
+        ImGui::TextDisabled("%zu chars  \xc2\xb7  %zu line%s",   // "·"
+                            nChars, nLines, nLines == 1 ? "" : "s");
+        ImGui::Spacing();
+
+        // ── Scrollable read-only editor ───────────────────────────────────────
+        // InputTextMultiline gives the user scroll, selection, and copy via Ctrl+A / Ctrl+C.
+        const float bodyH = ImGui::GetContentRegionAvail().y;
+        ImGui::InputTextMultiline(
+            "##celltextbody",
+            cellPopupText_.data(),       // std::string::data() is char* (C++17)
+            cellPopupText_.size() + 1,   // buf_size includes the null terminator
+            ImVec2(-1.0f, bodyH),
+            ImGuiInputTextFlags_ReadOnly);
+
+        ImGui::EndPopup();
+    }
+}
+
 void DataBrowser::DrawMainContent()
 {
-    const float paginH = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
+    const float paginH     = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
+    // Reserve a stable strip for the action bar below the grid (separator + one row of buttons).
+    // Always reserved when columnsReady so the grid height doesn't flicker on row selection.
+    const float actionBarH = columnsReady
+                                 ? (ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y * 3.0f)
+                                 : 0.0f;
 
     ImGui::BeginChild(("##dbmain" + idSuffix_).c_str(), ImVec2(0.0f, 0.0f), false, ImGuiWindowFlags_NoScrollbar);
 
     if (ui::DrawSqlEditor(sqlEditor_, source.get())) {
         columns.clear();
+        rawColumnKeys_.clear();
+        rawColumnRoles_.clear();
         for (const auto& ci : sqlEditor_.resultColumns) {
             ImGuiExt::ColumnDef col;
             col.key   = ci.name;
             col.label = ci.name;
+            col.semanticHint = ci.displayHint;
             columns.push_back(std::move(col));
+            rawColumnKeys_.push_back(ci.name);
+            rawColumnRoles_.push_back(ci.displayHint);
         }
         if (columnCustomizer)
             columnCustomizer(columns);
@@ -735,10 +808,13 @@ void DataBrowser::DrawMainContent()
         return;
     }
 
-    const float gridH = ImGui::GetContentRegionAvail().y - paginH;
+    const float gridH = ImGui::GetContentRegionAvail().y - paginH - actionBarH;
 
-    const bool hasImageCols =
-        std::ranges::any_of(columns, [](const ImGuiExt::ColumnDef& c) { return !c.semanticHint.empty(); });
+    // Only "image_path" / "image_blob" semantic hints require tall rows.
+    // Role tags like "entry_kind" or "filepath" must NOT trigger the large row height.
+    const bool hasImageCols = std::ranges::any_of(columns, [](const ImGuiExt::ColumnDef& c) {
+        return c.semanticHint == "image_path" || c.semanticHint == "image_blob";
+    });
 
     ImGuiExt::DataGridOptions opts;
     const std::string         gridId = "##dbgrid" + idSuffix_;
@@ -802,12 +878,47 @@ void DataBrowser::DrawMainContent()
         ImGui::TextDisabled("%s  —  row %d", query.table.c_str(), rowIdx + 1);
         ImGui::Separator();
 
+        // ── View Full Value (selected cell) ─────────────────────────────────
+        // anchorCol is the cell-selection column; -1 means row-only selection.
+        const int selCellCol = gridState.anchorRow == rowIdx ? gridState.anchorCol : -1;
+        if (selCellCol >= 0 && selCellCol < static_cast<int>(columns.size())) {
+            const int          rawIdx = GetRawColumnIndex(columns[static_cast<size_t>(selCellCol)].key);
+            const auto&        row    = rows[static_cast<size_t>(rowIdx)];
+            const std::string& val    = (rawIdx >= 0 && rawIdx < static_cast<int>(row.size()))
+                                            ? row[static_cast<size_t>(rawIdx)] : "";
+            const bool isLong = val.size() > 80 || val.find('\n') != std::string::npos;
+            if (isLong) {
+                const std::string viewLbl = std::string(ui::icons::Eye) + "  View full value\xe2\x80\xa6";
+                if (ImGui::MenuItem(viewLbl.c_str())) {
+                    cellPopupTitle_ = columns[static_cast<size_t>(selCellCol)].label
+                                    + "  \xe2\x80\x94  " + query.table
+                                    + "  \xc2\xb7  row " + std::to_string(rowIdx + 1);
+                    cellPopupText_    = val;
+                    showCellTextPopup_ = true;
+                }
+                ImGui::Separator();
+            }
+        }
+
+        // ── Copy cell (truncated label, full value to clipboard) ─────────────
         if (ImGui::BeginMenu("Copy cell")) {
             const auto& row = rows[static_cast<size_t>(rowIdx)];
-            for (size_t c = 0; c < columns.size() && c < row.size(); ++c) {
-                const std::string label = columns[c].label + ": " + row[c];
+            for (size_t c = 0; c < columns.size(); ++c) {
+                const int rawIdx = GetRawColumnIndex(columns[c].key);
+                if (rawIdx < 0 || rawIdx >= static_cast<int>(row.size())) continue;
+                const std::string& val = row[static_cast<size_t>(rawIdx)];
+
+                // Truncate the menu label so the menu doesn't become absurdly wide
+                constexpr size_t kMaxLabel = 60;
+                std::string preview = val.substr(0, kMaxLabel);
+                if (val.size() > kMaxLabel || val.find('\n') != std::string::npos)
+                    preview += " \xe2\x80\xa6";  // "…"
+                // Replace embedded newlines with ↵ for readability
+                for (char& ch : preview) if (ch == '\n' || ch == '\r') ch = '\xc2'; // placeholder
+                const std::string label = columns[c].label + ":  " + preview;
+
                 if (ImGui::MenuItem(label.c_str()))
-                    ImGui::SetClipboardText(row[c].c_str());
+                    ImGui::SetClipboardText(val.c_str()); // always copies full value
             }
             ImGui::EndMenu();
         }
@@ -816,8 +927,7 @@ void DataBrowser::DrawMainContent()
             const auto& row = rows[static_cast<size_t>(rowIdx)];
             std::string tsv;
             for (size_t c = 0; c < row.size(); ++c) {
-                if (c)
-                    tsv += '\t';
+                if (c) tsv += '\t';
                 tsv += row[c];
             }
             ImGui::SetClipboardText(tsv.c_str());
@@ -827,88 +937,97 @@ void DataBrowser::DrawMainContent()
         if (isFs) {
             ImGui::Separator();
 
-            int pathCol = -1, kindCol = -1;
-            for (int c = 0; c < static_cast<int>(columns.size()); ++c) {
-                if (columns[c].key == "path") pathCol = c;
-                if (columns[c].key == "kind") kindCol = c;
-            }
+            // ResolveRawColumnIndex: tries by semantic role first, then by column name.
+            // Works for any adapter that sets column_role::kFilePath / kEntryKind hints,
+            // not just the filesystem adapter.
+            const int pathCol = ResolveRawColumnIndex("path",  adapters::column_role::kFilePath);
+            const int kindCol = ResolveRawColumnIndex("kind",  adapters::column_role::kEntryKind);
 
             const auto&       row   = rows[static_cast<std::size_t>(rowIdx)];
             const std::string fpath = (pathCol >= 0 && pathCol < (int)row.size()) ? row[pathCol] : "";
             const std::string fkind = (kindCol >= 0 && kindCol < (int)row.size()) ? row[kindCol] : "";
 
             if (!fpath.empty()) {
-                const std::string openLbl =
-                    std::string(ui::icons::ExternalLink) + "  Open\xe2\x80\xa6";
-                if (ImGui::MenuItem(openLbl.c_str())) {
+                // ── Open (auto-dispatch) — always ───────────────────────────
+                if (ImGui::MenuItem((std::string(ui::icons::ExternalLink) + "  Open\xe2\x80\xa6").c_str()))
                     if (openCb_) openCb_(fpath, "auto");
-                }
 
-                // .app bundles (and other executable dir packages) — show explicit Launch item.
-                if (fkind == "dir" && ui::IsExecutableFile(fpath)) {
-                    const std::string lbl = std::string(ui::icons::Play) + "  Open Application";
-                    if (ImGui::MenuItem(lbl.c_str()))
-                        if (openCb_) openCb_(fpath, "system");
-                }
-
-                if (fkind == "file") {
-                    if (ui::IsImageFile(fpath)) {
-                        const std::string lbl = std::string(ui::icons::Image) + "  Open as Image";
-                        if (ImGui::MenuItem(lbl.c_str()))
-                            if (openCb_) openCb_(fpath, "image");
-                    }
-
-                    if (ui::IsSqliteFile(fpath)) {
-                        const std::string lbl = std::string(ui::icons::Database) + "  Open as SQLite";
-                        if (ImGui::MenuItem(lbl.c_str()))
-                            if (openCb_) openCb_(fpath, "sqlite");
-                    }
-
-                    if (ui::IsPdfFile(fpath)) {
-                        const std::string lbl = std::string(ui::icons::ExternalLink) + "  Open PDF";
-                        if (ImGui::MenuItem(lbl.c_str()))
-                            if (openCb_) openCb_(fpath, "system");
-                    }
-
+                // ── Directory / bundle actions ───────────────────────────────
+                if (fkind == "dir") {
                     if (ui::IsExecutableFile(fpath)) {
-                        const std::string lbl = std::string(ui::icons::Play) + "  Launch";
-                        if (ImGui::MenuItem(lbl.c_str()))
+                        // .app bundle: offer both launch and diving inside
+                        if (ImGui::MenuItem((std::string(ui::icons::Play) + "  Open Application").c_str()))
                             if (openCb_) openCb_(fpath, "system");
+                        if (ImGui::MenuItem((std::string(ui::icons::FolderOpen) + "  Browse Bundle").c_str()))
+                            if (openCb_) openCb_(fpath, "browse");
                     }
+                }
 
-                    if (ui::IsTextFile(fpath)) {
-                        const std::string lbl = std::string(ui::icons::File) + "  Open as Text";
-                        if (ImGui::MenuItem(lbl.c_str()))
-                            if (openCb_) openCb_(fpath, "text");
-                    }
+                // ── File-specific actions ────────────────────────────────────
+                if (fkind == "file" || fkind.empty()) {
+                    if (ui::IsImageFile(fpath))
+                        if (ImGui::MenuItem((std::string(ui::icons::Image) + "  Open as Image").c_str()))
+                            if (openCb_) openCb_(fpath, "image");
 
-                    ImGui::Separator();
-                    if (ImGui::MenuItem("Inspect Bytes\xe2\x80\xa6"))
+                    if (ui::IsSqliteFile(fpath))
+                        if (ImGui::MenuItem((std::string(ui::icons::Database) + "  Open as SQLite").c_str()))
+                            if (openCb_) openCb_(fpath, "sqlite");
+
+                    if (ui::IsPdfFile(fpath))
+                        if (ImGui::MenuItem((std::string(ui::icons::ExternalLink) + "  Open PDF").c_str()))
+                            if (openCb_) openCb_(fpath, "system");
+
+                    if (ui::IsExecutableFile(fpath))
+                        if (ImGui::MenuItem((std::string(ui::icons::Play) + "  Launch").c_str()))
+                            if (openCb_) openCb_(fpath, "system");
+
+                    // "Open as Text" — always shown for files; useful even for binaries
+                    // (user may know it's text with an unusual extension).
+                    if (ImGui::MenuItem((std::string(ui::icons::File) + "  Open as Text").c_str()))
+                        if (openCb_) openCb_(fpath, "text");
+                }
+
+                // ── Byte inspection — available for any entry with a path ────
+                ImGui::Separator();
+                if (fkind == "file" || fkind.empty()) {
+                    if (ImGui::MenuItem((std::string(ui::icons::Code) + "  Inspect Bytes\xe2\x80\xa6").c_str()))
                         hexView_.OpenFile(fpath);
                 }
             }
         }
 
+        // ── Inspect Cell Bytes — any adapter, any selected row ───────────────
         ImGui::Separator();
-        if (ImGui::BeginMenu("Inspect Cell Bytes\xe2\x80\xa6")) {
-            const auto& row = rows[static_cast<size_t>(rowIdx)];
-            for (size_t c = 0; c < columns.size() && c < row.size(); ++c) {
+        if (ImGui::BeginMenu((std::string(ui::icons::Search) + "  Inspect Cell Bytes\xe2\x80\xa6").c_str())) {
+            const auto& row     = rows[static_cast<size_t>(rowIdx)];
+            const auto  colInfos = source ? source->GetColumns(query.table)
+                                          : std::vector<adapters::ColumnInfo>{};
+            for (size_t c = 0; c < columns.size(); ++c) {
+                // Map display column index → raw row data index (survives column customizer)
+                const int rawIdx = GetRawColumnIndex(columns[c].key);
+                if (rawIdx < 0 || rawIdx >= static_cast<int>(row.size()))
+                    continue;
+
                 std::string itemLabel = columns[c].label;
-                const auto  colInfos  = source ? source->GetColumns(query.table)
-                                               : std::vector<adapters::ColumnInfo>{};
-                if (c < colInfos.size()) {
-                    const auto& tn = colInfos[c].typeName;
-                    if (tn.find("BLOB") != std::string::npos ||
-                        tn.find("blob") != std::string::npos)
+
+                // Annotate BLOB columns for visibility
+                const int rawForType = rawIdx;  // same index for type lookup
+                if (rawForType < static_cast<int>(colInfos.size())) {
+                    const auto& tn = colInfos[static_cast<size_t>(rawForType)].typeName;
+                    if (tn.find("BLOB") != std::string::npos || tn.find("blob") != std::string::npos)
                         itemLabel += "  [BLOB]";
                 }
+
+                const std::string byteCount = "  (" + std::to_string(row[static_cast<size_t>(rawIdx)].size()) + " B)";
+                itemLabel += byteCount;
+
                 if (ImGui::MenuItem(itemLabel.c_str())) {
                     const std::string lbl = columns[c].label
-                                            + "  \xe2\x80\x94  "  // " — "
+                                            + "  \xe2\x80\x94  "   // " — "
                                             + query.table
-                                            + "  \xc2\xb7  row "  // " · row "
+                                            + "  \xc2\xb7  row "   // " · row "
                                             + std::to_string(rowIdx + 1);
-                    hexView_.Open(lbl, row[c]);
+                    hexView_.Open(lbl, row[static_cast<size_t>(rawIdx)]);
                 }
             }
             ImGui::EndMenu();
@@ -942,9 +1061,146 @@ void DataBrowser::DrawMainContent()
         ImGui::EndDragDropTarget();
     }
 
+    DrawRowActionBar();
+
     if (ImGuiExt::DataGridPagination(query.page, query.pageSize, totalRows))
         needsRefresh = true;
 
     ImGui::EndChild();
+}
+
+void DataBrowser::DrawRowActionBar()
+{
+    // ── 1. Determine the active row ───────────────────────────────────────────
+    // Prefer the cell-selection anchor (cell-click sets anchorRow/anchorCol);
+    // fall back to row-Selectable selection (only sets selectedRow).
+    const int rowIdx = (gridState.anchorRow >= 0 && gridState.anchorRow < static_cast<int>(rows.size()))
+                           ? gridState.anchorRow
+                           : gridState.selectedRow;
+    const int colIdx = gridState.anchorCol; // -1 = row-only selection, no cell chosen
+
+    // Always draw separator so the layout height is stable (no flicker on select/deselect).
+    ImGui::Separator();
+
+    if (rowIdx < 0 || rowIdx >= static_cast<int>(rows.size())) {
+        // Nothing selected — show a subtle hint in place of the buttons.
+        const char*       hint   = "Select a row for quick actions";
+        const float       hw     = ImGui::CalcTextSize(hint).x;
+        const float       avail  = ImGui::GetContentRegionAvail().x;
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - hw) * 0.5f);
+        ImGui::TextDisabled("%s", hint);
+        return;
+    }
+
+    const auto& row = rows[static_cast<size_t>(rowIdx)];
+
+    // ── 2. Filesystem path / kind (only when adapter exposes those roles) ─────
+    const int pathCol = ResolveRawColumnIndex("path", adapters::column_role::kFilePath);
+    const int kindCol = ResolveRawColumnIndex("kind", adapters::column_role::kEntryKind);
+
+    std::string fpath, fkind;
+    if (pathCol >= 0 && pathCol < static_cast<int>(row.size()))
+        fpath = row[static_cast<size_t>(pathCol)];
+    if (kindCol >= 0 && kindCol < static_cast<int>(row.size()))
+        fkind = row[static_cast<size_t>(kindCol)];
+
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const bool isDir  = (fkind == "dir")  || (fkind.empty() && !fpath.empty() && fs::is_directory(fpath, ec));
+    const bool isFile = (fkind == "file") || (fkind.empty() && !fpath.empty() && fs::is_regular_file(fpath, ec));
+    const bool isApp  = isDir && !fpath.empty() && ui::IsExecutableFile(fpath);
+    const bool hasPath = !fpath.empty();
+
+    // ── 3. Cell selection (for Inspect Cell Bytes) ────────────────────────────
+    // anchorCol is the logical index into `columns[]` (includes hidden cols).
+    const bool hasCellSel = (colIdx >= 0 && colIdx < static_cast<int>(columns.size()));
+
+    std::string cellColName;
+    std::string cellValue;
+    if (hasCellSel) {
+        cellColName = columns[static_cast<size_t>(colIdx)].label;
+        // Map display column → raw row data index via key lookup.
+        const int rawCellIdx = GetRawColumnIndex(columns[static_cast<size_t>(colIdx)].key);
+        if (rawCellIdx >= 0 && rawCellIdx < static_cast<int>(row.size()))
+            cellValue = row[static_cast<size_t>(rawCellIdx)];
+    }
+
+    // ── 4. Build button list ──────────────────────────────────────────────────
+    struct ActionBtn
+    {
+        const char* icon;
+        const char* label;
+        const char* id;      // unique ImGui ID suffix
+        bool        show;
+    };
+
+    const std::array<ActionBtn, 5> btns = {{
+        { ui::icons::ExternalLink, "Open",          "open",    hasPath               },
+        { ui::icons::Play,         "Launch",         "launch",  hasPath && (isFile||isApp) },
+        { ui::icons::FolderOpen,   "Browse Bundle",  "browse",  hasPath && isApp      },
+        { ui::icons::Code,         "File Bytes",     "fbytes",  hasPath && isFile     },
+        { ui::icons::Search,       "Cell Bytes",     "cbytes",  hasCellSel            },
+    }};
+
+    // ── 5. Compute total width for centering ──────────────────────────────────
+    const float padX    = ImGui::GetStyle().FramePadding.x;
+    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+    const float btnH    = ImGui::GetFrameHeight();
+
+    float totalW   = 0.0f;
+    int   nVisible = 0;
+    for (const auto& b : btns) {
+        if (!b.show) continue;
+        totalW += ImGui::CalcTextSize((std::string(b.icon) + "  " + b.label).c_str()).x + padX * 2.0f;
+        ++nVisible;
+    }
+    totalW += spacing * static_cast<float>(std::max(0, nVisible - 1));
+
+    if (nVisible == 0) {
+        ImGui::TextDisabled("(no actions available for this row)");
+        return;
+    }
+
+    const float avail  = ImGui::GetContentRegionAvail().x;
+    const float offset = (avail - totalW) * 0.5f;
+    if (offset > 0.0f)
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offset);
+
+    // ── 6. Render buttons ─────────────────────────────────────────────────────
+    bool first = true;
+    for (const auto& b : btns) {
+        if (!b.show) continue;
+        if (!first) ImGui::SameLine(0.0f, spacing);
+        first = false;
+
+        const std::string lbl = std::string(b.icon) + "  " + b.label;
+        const float       bw  = ImGui::CalcTextSize(lbl.c_str()).x + padX * 2.0f;
+
+        const std::string btnId = lbl + "##actbar_" + idSuffix_ + "_" + b.id;
+        if (ImGui::Button(btnId.c_str(), ImVec2(bw, btnH))) {
+            if (std::string_view(b.id) == "fbytes") {
+                hexView_.OpenFile(fpath);
+            } else if (std::string_view(b.id) == "cbytes") {
+                // Inspect raw bytes of the selected cell value
+                const std::string title = cellColName + "  \xe2\x80\x94  row "
+                                          + std::to_string(rowIdx + 1);
+                hexView_.Open(title, cellValue);
+            } else if (openCb_) {
+                // "open" → "auto", "launch" → "system", "browse" → "browse"
+                const char* how = (std::string_view(b.id) == "open")   ? "auto"
+                                : (std::string_view(b.id) == "launch") ? "system"
+                                                                        : b.id;
+                openCb_(fpath, how);
+            }
+        }
+
+        // Tooltip: show full path or cell column+value
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
+            if (std::string_view(b.id) == "cbytes")
+                ImGui::SetTooltip("Column: %s\n%zu bytes", cellColName.c_str(), cellValue.size());
+            else
+                ImGui::SetTooltip("%s", fpath.c_str());
+        }
+    }
 }
 } // namespace datagrid

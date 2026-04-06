@@ -9,6 +9,7 @@
 
 #include "adapters/adapter_kind.hpp"
 #include "adapters/adapter_registry.hpp"
+#include "adapters/data_source.hpp"
 #ifdef DATAGRID_HAVE_DUCKDB
 #include "adapters/duckdb/duckdb_adapter.hpp"
 #endif
@@ -728,10 +729,13 @@ void App::InitFsBrowser(const std::string& dirPath)
                 browser_fs_->SetPreContentHook([this]() { RenderFsNavBar(); });
 
                 browser_fs_->SetOnRowClick([this](int, const std::vector<std::string>& row) {
-                    if (row.size() < 6)
+                    const int kindCol = browser_fs_->ResolveRawColumnIndex("kind", adapters::column_role::kEntryKind);
+                    const int pathCol = browser_fs_->ResolveRawColumnIndex("path", adapters::column_role::kFilePath);
+                    if (kindCol < 0 || pathCol < 0 ||
+                        row.size() <= static_cast<size_t>(std::max(kindCol, pathCol)))
                         return;
-                    const std::string kind = row[1];
-                    const std::string path = row[5]; // index 5 == path (see GetColumns contract)
+                    const std::string kind = row[static_cast<size_t>(kindCol)];
+                    const std::string path = row[static_cast<size_t>(pathCol)];
                     if (kind == "dir") {
                         if constexpr (io::kClickNavigates) {
                             // .app bundles are launchable packages — open with OS, don't step in.
@@ -751,10 +755,13 @@ void App::InitFsBrowser(const std::string& dirPath)
                 });
 
                 browser_fs_->SetOnRowDblClick([this](int, const std::vector<std::string>& row) {
-                    if (row.size() < 6)
+                    const int kindCol = browser_fs_->ResolveRawColumnIndex("kind", adapters::column_role::kEntryKind);
+                    const int pathCol = browser_fs_->ResolveRawColumnIndex("path", adapters::column_role::kFilePath);
+                    if (kindCol < 0 || pathCol < 0 ||
+                        row.size() <= static_cast<size_t>(std::max(kindCol, pathCol)))
                         return;
-                    const std::string kind = row[1]; // copy before NavigateFs may clear rows
-                    const std::string path = row[5]; // index 5 == path (see GetColumns contract)
+                    const std::string kind = row[static_cast<size_t>(kindCol)]; // copy before NavigateFs may clear rows
+                    const std::string path = row[static_cast<size_t>(pathCol)];
                     if (kind == "dir") {
                         // .app bundles are launchable packages — open with OS, don't step in.
                         if (ui::IsExecutableFile(std::filesystem::path(path)))
@@ -765,15 +772,18 @@ void App::InitFsBrowser(const std::string& dirPath)
                 });
 
                 browser_fs_->SetDragSourceCallback([this](int, const std::vector<std::string>& row) {
-                    if (row.size() < 6)
+                    const int pathCol = browser_fs_->ResolveRawColumnIndex("path", adapters::column_role::kFilePath);
+                    const int kindCol = browser_fs_->ResolveRawColumnIndex("kind", adapters::column_role::kEntryKind);
+                    if (pathCol < 0 || kindCol < 0 ||
+                        row.size() <= static_cast<size_t>(std::max(pathCol, kindCol)))
                         return;
 
                     io::FilePayload payload{};
                     payload.sourceBrowserId = browser_fs_->InstanceId();
 
                     namespace fs               = std::filesystem;
-                    const std::string& absPath = row[5];
-                    const std::string& kind    = row[1];
+                    const std::string& absPath = row[static_cast<size_t>(pathCol)];
+                    const std::string& kind    = row[static_cast<size_t>(kindCol)];
                     const std::string  fname   = fs::path(absPath).filename().string();
                     const std::string  ext     = io::FileExtension(absPath);
 
@@ -836,7 +846,15 @@ void App::OpenFsFile(const std::string& path, const std::string& how)
     if (how == "image") { OpenImageViewer(path); return; }
     if (how == "text")  { OpenTextViewer(path); return; }
     if (how == "sqlite"){ OpenSqliteViewer(path); return; }
-    if (how == "hex")   { return; } // hex view opened directly via context menu
+    if (how == "hex")   { return; } // hex view opened directly via context menu / action bar
+
+    // "browse" — navigate into a directory (used for .app bundles and other dirs)
+    if (how == "browse") {
+        if (browser_fs_ && fsAdapter_) {
+            NavigateFs(path);
+        }
+        return;
+    }
 
     if (how == "system") {
         io::OpenWithSystem(path);
@@ -875,6 +893,24 @@ void App::RenderFsNavBar()
         fsPathSync_ = false;
     }
 
+    // ── Keyboard shortcut: toggle hidden files ───────────────────────────────
+    // macOS: Cmd+Shift+.   (mirrors Finder)
+    // Win/Linux: Ctrl+H    (mirrors Nautilus / Windows Explorer)
+    {
+        const ImGuiIO& kio  = ImGui::GetIO();
+#if defined(__APPLE__)
+        const bool shortcutHit = ImGui::IsKeyPressed(ImGuiKey_Period, false)
+                              && (kio.KeyMods == (ImGuiMod_Super | ImGuiMod_Shift));
+#else
+        const bool shortcutHit = ImGui::IsKeyPressed(ImGuiKey_H, false)
+                              && (kio.KeyMods == ImGuiMod_Ctrl);
+#endif
+        if (shortcutHit) {
+            fsAdapter_->SetShowHidden(!fsAdapter_->GetShowHidden());
+            browser_fs_->InvalidateData();
+        }
+    }
+
     const bool atRoot = (fsAdapter_->GetCurrentPath() == fsAdapter_->GetParentPath());
     if (atRoot)
         ImGui::BeginDisabled();
@@ -903,6 +939,30 @@ void App::RenderFsNavBar()
     }
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
         ImGui::SetTooltip("Home directory");
+
+    ImGui::SameLine();
+
+    // ── Show/hide hidden files toggle button ─────────────────────────────────
+    const bool showHidden = fsAdapter_->GetShowHidden();
+#if defined(__APPLE__)
+    constexpr const char* kHiddenShortcut = "Cmd+Shift+.";
+#else
+    constexpr const char* kHiddenShortcut = "Ctrl+H";
+#endif
+    // Use Eye / EyeSlash icon so the state is visually obvious.
+    const char* eyeIcon = showHidden ? ui::icons::Eye : ui::icons::EyeSlash;
+    if (showHidden)
+        ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetColorU32(ImGuiCol_ButtonActive));
+    if (ImGui::Button(eyeIcon)) {
+        fsAdapter_->SetShowHidden(!showHidden);
+        browser_fs_->InvalidateData();
+    }
+    if (showHidden)
+        ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+        ImGui::SetTooltip("%s hidden files  (%s)",
+                          showHidden ? "Hide" : "Show",
+                          kHiddenShortcut);
 
     ImGui::SameLine();
 
