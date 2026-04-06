@@ -21,7 +21,7 @@ class DataBrowser
   public:
     /// Construct with an already-connected data source.
     /// The browser takes ownership of the adapter.
-    explicit DataBrowser(Adapters::DataSourcePtr source, const std::string& windowTitle = "Data Browser");
+    explicit DataBrowser(adapters::DataSourcePtr source, const std::string& windowTitle = "Data Browser");
 
     ~DataBrowser() = default;
 
@@ -34,7 +34,7 @@ class DataBrowser
     DataBrowser& operator=(DataBrowser&&) = delete;
 
     /// Inject the current layout before calling Render().
-void SetLayout(const ui::ResponsiveLayout& layout);
+    void SetLayout(const ui::ResponsiveLayout& layout);
 
     /// Callback invoked once after columns are built from the adapter schema.
     /// Use it to set per-column widths, types, renderers, and visibility.
@@ -63,7 +63,7 @@ void SetLayout(const ui::ResponsiveLayout& layout);
 
     /// Replace the current data source at runtime (e.g. user opens a different
     /// file).  Resets all query state and triggers a full re-initialise.
-    void SetDataSource(Adapters::DataSourcePtr source);
+    void SetDataSource(adapters::DataSourcePtr source);
 
     [[nodiscard]] bool        IsConnected() const;
     [[nodiscard]] std::string AdapterLabel() const;
@@ -76,7 +76,7 @@ void SetLayout(const ui::ResponsiveLayout& layout);
 
     /// Raw pointer to the underlying data source — useful for dynamic_cast to
     /// adapter-specific types in callbacks / hooks.  Never nullptr while connected.
-    [[nodiscard]] Adapters::IDataSource* GetSource() const;
+    [[nodiscard]] adapters::IDataSource* GetSource() const;
 
     [[nodiscard]] bool IsInspectorOpen() const;
     void               CloseInspector();
@@ -158,16 +158,16 @@ void SetLayout(const ui::ResponsiveLayout& layout);
     void BuildColumns();                            ///< Rebuild columns from adapter schema + customizer
     void RefreshData();                             ///< Re-execute current query; update rows + totalRows
 
-    Adapters::DataSourcePtr source;
+    adapters::DataSourcePtr source;
 
-    Adapters::DataQuery query;
+    adapters::DataQuery query;
     int                 totalRows = 0;
 
     std::vector<ImGuiExt::ColumnDef>      columns;
     std::vector<std::vector<std::string>> rows;
     ImGuiExt::DataGridState               gridState;
 
-    std::vector<Adapters::TableInfo> tables;
+    std::vector<adapters::TableInfo> tables;
 
     ui::ResponsiveLayout layout_;
 

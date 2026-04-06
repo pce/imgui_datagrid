@@ -405,16 +405,17 @@ void HexViewDialog::RenderInspector()
                             nPush = 2;
                         }
 
-                        char lbl[8], sid[16];
+                        char lbl[4];
                         std::snprintf(lbl, sizeof(lbl), "%02X", byt);
-                        std::snprintf(sid, sizeof(sid), "##b%d", idx);
 
-                        // Selectable label rendered via text, invisible selectable for hit-test
+                        // PushID(idx) gives every byte a unique ImGui ID
+                        ImGui::PushID(idx);
                         if (ImGui::Selectable(lbl, isSel, ImGuiSelectableFlags_None,
                                               ImVec2(kByteW, 0.0f)))
                             selected_ = isSel ? -1 : idx;
-
+                        ImGui::PopID();
                         if (nPush) ImGui::PopStyleColor(nPush);
+
 
                         if (ImGui::IsItemHovered()) {
                             ImGui::BeginTooltip();

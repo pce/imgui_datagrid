@@ -175,8 +175,3 @@ class IDataSource
 using DataSourcePtr = std::unique_ptr<IDataSource>;
 
 } // namespace datagrid::adapters
-
-/// Backward-compat alias — existing code using the old `Adapters::` prefix
-/// continues to compile without changes.
-namespace Adapters = datagrid::adapters;
-

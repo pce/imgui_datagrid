@@ -138,14 +138,17 @@ bool FilesystemAdapter::HasCapability(FsCapability capability) const {
 
 std::vector<ColumnInfo> FilesystemAdapter::GetColumns(const std::string& /*table*/) const
 {
+    // Column order is part of the public contract:
+    //   0:name  1:kind  2:size  3:modified  4:permissions  5:path
+    // Callbacks (e.g. in app.cpp) rely on row[5] == absolute path.
     std::vector<ColumnInfo> cols = {
         {"name",     "TEXT", false, false},
         {"kind",     "TEXT", false, false},
         {"size",     "TEXT", true,  false},
         {"modified", "TEXT", true,  false},
-        {"path",     "TEXT", false, false},
     };
-    cols.push_back({std::string{io::Platform::kPermColName}, "TEXT", true, false});
+    cols.push_back({std::string{io::Platform::kPermColName}, "TEXT", true,  false});
+    cols.push_back({"path", "TEXT", false, false});
     return cols;
 }
 
@@ -560,13 +563,15 @@ std::string FilesystemAdapter::FormatPerms(fs::perms p)
 
 std::vector<std::string> FilesystemAdapter::EntryToRow(const FilesystemEntry& e)
 {
+    // Must match the column order in GetColumns():
+    //   0:name  1:kind  2:size  3:modified  4:permissions  5:path
     return {
         e.name,
         e.kind,
         e.sizeStr,
         e.modified,
-        e.path,
         e.permissions,
+        e.path,
     };
 }
 

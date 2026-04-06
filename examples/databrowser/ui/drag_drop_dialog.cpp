@@ -495,7 +495,7 @@ void DropDialogManager::RenderFileToViewDialog()
 
     if (doCreate && fileToViewNameBuf_[0] != '\0' && target_) {
 #ifdef DATAGRID_HAVE_DUCKDB
-        auto* duck = dynamic_cast<Adapters::DuckDBAdapter*>(target_->GetSource());
+        auto* duck = dynamic_cast<adapters::DuckDBAdapter*>(target_->GetSource());
         if (duck) {
             const auto res = duck->ScanFile(fileToViewPayload_.path, std::string{fileToViewNameBuf_});
             if (!res) {

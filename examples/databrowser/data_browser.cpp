@@ -13,7 +13,7 @@ namespace datagrid {
 
 int DataBrowser::nextInstanceId_ = 0;
 
-DataBrowser::DataBrowser(Adapters::DataSourcePtr source_, const std::string& title)
+DataBrowser::DataBrowser(adapters::DataSourcePtr source_, const std::string& title)
     : source(std::move(source_)), windowTitle(title)
 {
     if (IsConnected()) {
@@ -60,7 +60,7 @@ void DataBrowser::SetOnRowDblClick(RowCallback fn)
     onRowDblClick = std::move(fn);
 }
 
-void DataBrowser::SetDataSource(Adapters::DataSourcePtr newSource)
+void DataBrowser::SetDataSource(adapters::DataSourcePtr newSource)
 {
     source = std::move(newSource);
     tables.clear();
@@ -121,7 +121,7 @@ void DataBrowser::NavigateTo(const std::string& tableOrPath)
     SelectTable(tableOrPath);
 }
 
-Adapters::IDataSource* DataBrowser::GetSource() const
+adapters::IDataSource* DataBrowser::GetSource() const
 {
     return source.get();
 }
@@ -288,7 +288,7 @@ void DataBrowser::RefreshData()
     if (!IsConnected() || query.table.empty())
         return;
 
-    const Adapters::QueryResult res = source->ExecuteQuery(query);
+    const adapters::QueryResult res = source->ExecuteQuery(query);
 
     if (!res.ok()) {
         lastError = res.error;
@@ -844,6 +844,13 @@ void DataBrowser::DrawMainContent()
                     if (openCb_) openCb_(fpath, "auto");
                 }
 
+                // .app bundles (and other executable dir packages) — show explicit Launch item.
+                if (fkind == "dir" && ui::IsExecutableFile(fpath)) {
+                    const std::string lbl = std::string(ui::icons::Play) + "  Open Application";
+                    if (ImGui::MenuItem(lbl.c_str()))
+                        if (openCb_) openCb_(fpath, "system");
+                }
+
                 if (fkind == "file") {
                     if (ui::IsImageFile(fpath)) {
                         const std::string lbl = std::string(ui::icons::Image) + "  Open as Image";
@@ -888,7 +895,7 @@ void DataBrowser::DrawMainContent()
             for (size_t c = 0; c < columns.size() && c < row.size(); ++c) {
                 std::string itemLabel = columns[c].label;
                 const auto  colInfos  = source ? source->GetColumns(query.table)
-                                               : std::vector<Adapters::ColumnInfo>{};
+                                               : std::vector<adapters::ColumnInfo>{};
                 if (c < colInfos.size()) {
                     const auto& tn = colInfos[c].typeName;
                     if (tn.find("BLOB") != std::string::npos ||

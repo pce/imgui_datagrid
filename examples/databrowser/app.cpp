@@ -731,10 +731,15 @@ void App::InitFsBrowser(const std::string& dirPath)
                     if (row.size() < 6)
                         return;
                     const std::string kind = row[1];
-                    const std::string path = row[5];
+                    const std::string path = row[5]; // index 5 == path (see GetColumns contract)
                     if (kind == "dir") {
-                        if constexpr (io::kClickNavigates)
-                            NavigateFs(path);
+                        if constexpr (io::kClickNavigates) {
+                            // .app bundles are launchable packages — open with OS, don't step in.
+                            if (ui::IsExecutableFile(std::filesystem::path(path)))
+                                OpenFsFile(path, "system");
+                            else
+                                NavigateFs(path);
+                        }
                     } else if (kind == "file") {
                         if (path.empty())
                             return;
@@ -749,9 +754,14 @@ void App::InitFsBrowser(const std::string& dirPath)
                     if (row.size() < 6)
                         return;
                     const std::string kind = row[1]; // copy before NavigateFs may clear rows
-                    const std::string path = row[5];
-                    if (kind == "dir")
-                        NavigateFs(path);
+                    const std::string path = row[5]; // index 5 == path (see GetColumns contract)
+                    if (kind == "dir") {
+                        // .app bundles are launchable packages — open with OS, don't step in.
+                        if (ui::IsExecutableFile(std::filesystem::path(path)))
+                            OpenFsFile(path, "system");
+                        else
+                            NavigateFs(path);
+                    }
                 });
 
                 browser_fs_->SetDragSourceCallback([this](int, const std::vector<std::string>& row) {
