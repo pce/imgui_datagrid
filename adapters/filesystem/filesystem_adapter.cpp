@@ -387,7 +387,7 @@ QueryResult FilesystemAdapter::Execute(const std::string& sql) const
     resolved = patchPath(resolved, "FROM .", currentPath_.string());
     resolved = patchPath(resolved, "FROM '.'", currentPath_.string());
 
-    auto q = LinQuery::from_sql(resolved);
+    auto q = FluentQuery::from_sql(resolved);
     if (!q) {
         QueryResult r;
         r.error = "SQL parse error: " + q.error();
